@@ -13,9 +13,9 @@
             "console": "integratedTerminal",
             "justMyCode": true,
             "env":{
-                "CUDA_VISIBLE_DEVICES":"0,1,2,3"
+                "CUDA_VISIBLE_DEVICES":"1"
             },
-            "args":[]
+            "args":["--model","xlnet-base-cased","--batch_size","1","--grad_clip","3.0","--bert_lr","5e-4","--retokenize"]
 
 
         }

@@ -22,7 +22,7 @@ lemmatizer = WordNetLemmatizer()
 import hapi
 hapi.config.data_dir = "/home/jkl6486/HAPI" 
 
-from transformers import AutoTokenizer, XLNetForSequenceClassification
+
 
 
 class IMDB(Dataset):
@@ -43,7 +43,7 @@ class IMDB(Dataset):
     @param (torch.device) device: 'cpu' or 'gpu', decides where to store the data tensors
 
     """
-    def __init__(self, input_directory, hapi_info):
+    def __init__(self, input_directory, hapi_info,tokenizer,retokenize):
        
         self.positive_path = os.path.join(input_directory, 'pos')
         self.positive_files = [f for f in os.listdir(self.positive_path)
@@ -56,8 +56,9 @@ class IMDB(Dataset):
         self.num_negative_examples = len(self.negative_files)
         self.negative_label = 1
 
-        self.tokenizer = AutoTokenizer.from_pretrained("xlnet-base-cased")
-        
+        self.tokenizer = tokenizer
+        self.retokenize = retokenize
+
         
         dic = hapi_info 
 
@@ -77,13 +78,13 @@ class IMDB(Dataset):
         # Pre-tokenize & encode examples
         self.pre_tokenize_and_encode_examples()
 
-    def pre_tokenize_and_encode_examples(self,retokenize=False):
+    def pre_tokenize_and_encode_examples(self):
         """
         Function to tokenize & encode examples and save the tokenized versions to a separate folder.
         This way, we won't have to perform the same tokenization and encoding ops every epoch.
         """
-        if retokenize or not os.path.exists(os.path.join(self.positive_path, 'tokenized_and_encoded')):
-            if retokenize:
+        if self.retokenize or not os.path.exists(os.path.join(self.positive_path, 'tokenized_and_encoded')):
+            if self.retokenize:
                 try:
                     shutil.rmtree(os.path.join(self.positive_path, 'tokenized_and_encoded'))
                 except:
@@ -100,15 +101,15 @@ class IMDB(Dataset):
                 example = re.sub(r'<br />', '', example)
                 example = example.lstrip().rstrip()
                 example = re.sub(' +', ' ', example)
-                example = self.tokenizer(example,return_tensors='pt',padding="max_length",max_length=512,truncation=True)
+                example = self.tokenizer(example,return_tensors='pt',padding="max_length",max_length=128,truncation=True)
 
                 with open(os.path.join(self.positive_path, 'tokenized_and_encoded', file), mode='wb') as f:
                     pickle.dump(obj=example, file=f)
         else:
             logging.warning('Tokenized positive reviews directory already exists!')
 
-        if retokenize or not os.path.exists(os.path.join(self.negative_path, 'tokenized_and_encoded')):
-            if retokenize:
+        if self.retokenize or not os.path.exists(os.path.join(self.negative_path, 'tokenized_and_encoded')):
+            if self.retokenize:
                 try:
                     shutil.rmtree(os.path.join(self.negative_path, 'tokenized_and_encoded'))
                 except:
@@ -125,7 +126,7 @@ class IMDB(Dataset):
                 example = re.sub(r'<br />', '', example)
                 example = example.lstrip().rstrip()
                 example = re.sub(' +', ' ', example)
-                example = self.tokenizer(example,return_tensors='pt',padding="max_length",max_length=512,truncation=True)
+                example = self.tokenizer(example,return_tensors='pt',padding="max_length",max_length=128,truncation=True)
 
 
                 with open(os.path.join(self.negative_path, 'tokenized_and_encoded', file), mode='wb') as f:

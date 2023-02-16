@@ -1,17 +1,15 @@
-from transformers import XLNetConfig, XLNetModel
 
-
+from transformers import RobertaTokenizer, RobertaModel
 
 #!/usr/bin/env python3
 
 import torch
 
 import torchvision.models.vision_transformer as XLNet
-from transformers import XLNetTokenizer, XLNetForSequenceClassification
+from transformers import AutoTokenizer, XLNetForSequenceClassification
 
 import torch.nn as nn
 
-        
 
 
 
@@ -20,24 +18,26 @@ from torch.optim.lr_scheduler import _LRScheduler
 import torch.utils.data
 from typing import Generator, Iterator, Mapping
 from collections.abc import Iterable
-TOKENIZERS_PARALLELISIM = True
 
-class XLNet(nn.Module):
 
-    def __init__(self, name: str = 'xlnet-base-cased', num_classes=2, parallel = True, model_name = "xlnet-base-cased",**kwargs):
-        super(XLNet, self).__init__()
+class ROBERTA(nn.Module):
+
+    def __init__(self, name: str = 'roberta-large', num_classes=2, parallel = True,**kwargs):
+        super(ROBERTA, self).__init__()
 
         if parallel:
-            self.model = nn.DataParallel(XLNetForSequenceClassification.from_pretrained(model_name, num_labels=num_classes)).cuda()
+            self.model = nn.DataParallel(RobertaModel.from_pretrained(name,num_labels=num_classes)).cuda()
         else:
-            self.model = XLNetForSequenceClassification.from_pretrained(model_name, num_labels=num_classes).cuda()
-
-        self.tokenizer = XLNetTokenizer.from_pretrained(name)
-
-    def forward(self, input_ids,token_type_ids,attention_mask):
+            self.model = RobertaModel.from_pretrained(name,num_labels=num_classes).cuda()
+            
+        self.tokenizer = RobertaTokenizer.from_pretrained(name)
 
         
-        return self.model(input_ids=input_ids,token_type_ids=token_type_ids,attention_mask=attention_mask).logits
+
+    def forward(self, input_ids,attention_mask):
+
+        
+        return self.model(input_ids=input_ids,attention_mask=attention_mask).logits
     
         
     def get_parameter_from_name(self, name: str = 'full'
