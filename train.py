@@ -4,6 +4,7 @@ BERT parameters, for the IMDB dataset.
 """
 
 
+import json
 import os
 import random
 import numpy as np
@@ -28,7 +29,7 @@ parser = argparse.ArgumentParser(description='Process some integers.')
 
 
 parser.add_argument('--batch_size', type=int, default=64)
-parser.add_argument('--epochs', type=int, default=10)
+parser.add_argument('--epochs', type=int, default=4)
 parser.add_argument('--num_classes', type=int, default=2)
 parser.add_argument('--num_workers', type=int, default=8)
 parser.add_argument('--bert_lr', type=float, default=5e-5)
@@ -40,19 +41,18 @@ parser.add_argument('--grad_clip', type=float, default=5.0)
 parser.add_argument('--eps', type=float, default=1e-8)
 parser.add_argument('--hapi_info', type=str, default='sa/imdb/amazon_sa/22-05-23')
 parser.add_argument('--dataset_path', type=str, default='/data/jc/data/sentiment/IMDB_new/')
-parser.add_argument('--model', type=str, default='roberta-large')
+parser.add_argument('--model', type=str, default='xlnet-base-cased')
 parser.add_argument('--log_dir', action='store_true')
 parser.add_argument('--optimizer', type=str, default='Adam')
 parser.add_argument('--mixmatch', action='store_true')
 parser.add_argument('--seed', type=int, default=42)
 parser.add_argument('--op_parameters', type=str, default='full')
-parser.add_argument('--lr_scheduler', action='store_true',default=True)
+parser.add_argument('--lr_scheduler', action='store_true')
 parser.add_argument('--validate_interval', type=int, default=1)
 #TODO: fix save
 parser.add_argument('--save', action='store_true')
 parser.add_argument('--label_train', action='store_true')
 parser.add_argument('--retokenize', action='store_true')
-
 args = parser.parse_args()
 
 device = torch.cuda.device_count()
@@ -118,7 +118,19 @@ if args.log_dir:
         log_dir += "_labeltrain"
 else:
     log_dir = 'runs/debug'
-            
+
+if args.lr_scheduler:
+    log_dir += "_lr_scheduler"
+
+try:
+    os.mkdir(log_dir)
+except:
+    print( "Directory %s already exists" % log_dir)
+
+
+with open(os.path.join(log_dir,'args.txt'), mode='w') as f:
+    json.dump(args.__dict__, f, indent=2)
+                
 distillation(module=model,num_classes=args.num_classes,
              validate_interval=args.validate_interval,
              epochs=args.epochs,optimizer=optimizer,

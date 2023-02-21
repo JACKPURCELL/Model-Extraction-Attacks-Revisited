@@ -18,7 +18,7 @@ from torch.utils.data import DataLoader
 from pytorch_transformers import AdamW  # Adam's optimization w/ fixed weight decay
 
 from dataset.imdb import IMDB
-from utils.model import distillation
+from utils.model import distillation,train
 from models.xlnet import XLNet
 import models
 import argparse
@@ -31,7 +31,7 @@ parser = argparse.ArgumentParser(description='Process some integers.')
 
 
 parser.add_argument('--batch_size', type=int, default=64)
-parser.add_argument('--epochs', type=int, default=10)
+parser.add_argument('--epochs', type=int, default=4)
 parser.add_argument('--num_classes', type=int, default=2)
 parser.add_argument('--num_workers', type=int, default=8)
 parser.add_argument('--bert_lr', type=float, default=5e-5)
@@ -140,7 +140,7 @@ with open(os.path.join(log_dir,'args.txt'), mode='w') as f:
 # args = parser.parse_args()
 # with open('commandline_args.txt', 'r') as f:
 #     args.__dict__ = json.load(f)                  
-distillation(module=model,num_classes=args.num_classes,
+train(module=model,num_classes=args.num_classes,
              validate_interval=args.validate_interval,
              epochs=args.epochs,optimizer=optimizer,
              lr_scheduler=lr_scheduler, 
