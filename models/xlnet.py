@@ -40,23 +40,12 @@ class XLNet(nn.Module):
         return self.model(input_ids=input_ids,token_type_ids=token_type_ids,attention_mask=attention_mask).logits
     
         
-    def get_parameter_from_name(self, name: str = 'full'
-                                ) -> Iterator[nn.Parameter]:
-        match name:
-            # case 'features':
-            #     params = self.model.features.parameters()
-            # case 'classifier' | 'partial':
-            #     params = self.model.classifier.parameters()
-            case 'full':
-                params = self.model.parameters()
-            case _:
-                raise NotImplementedError(f'{name=}')
-        return params
+
         
     def define_optimizer(
-            self, parameters: str | Iterator[nn.Parameter] = 'full',
+            self, parameters: str | Iterator[nn.Parameter] = 'partial',
             OptimType: str | type[Optimizer] = 'Adam',
-            lr: float = 0.1, momentum: float = 0.0, weight_decay: float = 0.0,
+            lr: float = 0.1, custom_lr: float = 1e-3, momentum: float = 0.0, weight_decay: float = 0.0,
             lr_scheduler: bool = False,
             lr_scheduler_type: str = 'CosineAnnealingLR',
             lr_step_size: int = 30, lr_gamma: float = 0.1,
@@ -122,22 +111,45 @@ class XLNet(nn.Module):
             (torch.optim.Optimizer, torch.optim.lr_scheduler._LRScheduler):
                 The tuple of optimizer and lr_scheduler.
         """
-        kwargs['momentum'] = momentum
-        kwargs['weight_decay'] = weight_decay
-        kwargs['betas'] = betas
-        kwargs['eps'] = eps
-        match parameters:
-            case str():
-                parameters = self.get_parameter_from_name(name=parameters)
-            case Iterable():
-                pass
-            case _:
-                raise TypeError(f'{type(parameters)=}    {parameters=}')
         if isinstance(OptimType, str):
             OptimType: type[Optimizer] = getattr(torch.optim, OptimType)
-        keys = OptimType.__init__.__code__.co_varnames
-        kwargs = {k: v for k, v in kwargs.items() if k in keys}
-        optimizer = OptimType(parameters, lr, **kwargs)
+        match parameters:
+            case 'classifier' | 'partial':
+                bert_identifiers = ['transformer']
+                no_weight_decay_identifiers = ['bias', 'layer_norm.weight']
+                grouped_model_parameters = [
+                        {'params': [param for name, param in self.model.named_parameters()
+                                    if any(identifier in name for identifier in bert_identifiers) and
+                                    not any(identifier_ in name for identifier_ in no_weight_decay_identifiers)],
+                        'lr': lr,
+                        'betas': betas,
+                        'weight_decay': weight_decay,
+                        'eps': eps},
+                        {'params': [param for name, param in self.model.named_parameters()
+                                    if any(identifier in name for identifier in bert_identifiers) and
+                                    any(identifier_ in name for identifier_ in no_weight_decay_identifiers)],
+                        'lr': lr,
+                        'betas': betas,
+                        'weight_decay': 0.0,
+                        'eps': eps},
+                        {'params': [param for name, param in self.model.named_parameters()
+                                    if not any(identifier in name for identifier in bert_identifiers)],
+                        'lr': custom_lr,
+                        'betas': betas,
+                        'weight_decay': 0.0,
+                        'eps': eps}
+                ]
+                optimizer = OptimType(grouped_model_parameters)
+            case 'full':
+                kwargs['momentum'] = momentum
+                kwargs['weight_decay'] = weight_decay
+                kwargs['betas'] = betas
+                kwargs['eps'] = eps
+                keys = OptimType.__init__.__code__.co_varnames
+                kwargs = {k: v for k, v in kwargs.items() if k in keys}
+                params = self.model.parameters()
+                optimizer = OptimType(params, lr, **kwargs)
+
         _lr_scheduler: _LRScheduler = None
         
         lr_warmup_epochs = int(epochs * lr_warmup_percent)

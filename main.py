@@ -36,7 +36,7 @@ parser.add_argument('--num_classes', type=int, default=2)
 parser.add_argument('--num_workers', type=int, default=8)
 parser.add_argument('--bert_lr', type=float, default=5e-5)
 parser.add_argument('--lr_warmup_percent', type=float, default=0.1)
-# parser.add_argument('--custom_lr', type=float, default=1e-3)
+parser.add_argument('--custom_lr', type=float, default=1e-3)
 parser.add_argument('--betas', type=tuple, default=(0.9, 0.999))
 parser.add_argument('--bert_weight_decay', type=float, default=0.01)
 parser.add_argument('--grad_clip', type=float, default=5.0)
@@ -48,7 +48,7 @@ parser.add_argument('--log_dir', action='store_true')
 parser.add_argument('--optimizer', type=str, default='Adam')
 parser.add_argument('--mixmatch', action='store_true')
 parser.add_argument('--seed', type=int, default=42)
-parser.add_argument('--op_parameters', type=str, default='full')
+parser.add_argument('--op_parameters', type=str, default='partial')
 parser.add_argument('--lr_scheduler', action='store_true')
 parser.add_argument('--validate_interval', type=int, default=1)
 #TODO: fix save
@@ -102,11 +102,12 @@ test_loader = DataLoader(dataset=test_dataset,
 
 
     
+
     
 optimizer, lr_scheduler = model.define_optimizer(
         parameters=args.op_parameters,
         OptimType=args.optimizer,
-        lr=args.bert_lr,weight_decay=args.bert_weight_decay,
+        lr=args.bert_lr,custom_lr=args.custom_lr,weight_decay=args.bert_weight_decay,
         lr_scheduler=args.lr_scheduler,
         epochs=args.epochs, 
         lr_warmup_percent=args.lr_warmup_percent, 
@@ -116,7 +117,7 @@ optimizer, lr_scheduler = model.define_optimizer(
 
  
 if args.log_dir:
-    log_dir = 'runs/'+ args.hapi_info.replace('/','_')+"_ep"+str(args.epochs)+"_lr"+str(args.bert_lr)+"_bs"+str(args.batch_size)+"_"+args.optimizer
+    log_dir = 'runs/'+ args.hapi_info.replace('/','_')+"_ep"+str(args.epochs)+"_lr"+str(args.bert_lr)+"_bs"+str(args.batch_size)+"_"+args.optimizer+"_"+args.op_parameters+"_"+args.model
     if args.label_train:
         log_dir += "_labeltrain"
 else:
