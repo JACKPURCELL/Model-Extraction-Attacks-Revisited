@@ -402,9 +402,9 @@ def distillation(module: nn.Module, num_classes: int,
                  logger.update(n=batch_size, loss=float(loss))
             else:    
                 hapi_acc1, hapi_acc5 = accuracy_fn(
-                    _output[:,:2], hapi_label, num_classes=num_classes, topk=(1, 5))
+                    _output[:,:2], hapi_label, num_classes=2, topk=(1, 5))
                 gt_acc1, gt_acc5 = accuracy_fn(
-                    _output[:,:2], _label, num_classes=num_classes, topk=(1, 5))
+                    _output[:,:2], _label, num_classes=2, topk=(1, 5))
                 batch_size = int(_label.size(0)) 
                 logger.update(n=batch_size, gt_acc1=gt_acc1,  
                             hapi_loss=float(loss), hapi_acc1=hapi_acc1)
@@ -726,9 +726,9 @@ def train(module: nn.Module, num_classes: int,
                  logger.update(n=batch_size, loss=float(loss))
             else:    
                 hapi_acc1, hapi_acc5 = accuracy_fn(
-                    _output, hapi_label, num_classes=2, topk=(1, 5))
+                    _output, hapi_label, num_classes=num_classes, topk=(1, 5))
                 gt_acc1, gt_acc5 = accuracy_fn(
-                    _output, _label, num_classes=2, topk=(1, 5))
+                    _output, _label, num_classes=num_classes, topk=(1, 5))
                 batch_size = int(_label.size(0)) 
                 logger.update(n=batch_size, gt_acc1=gt_acc1, 
                             hapi_loss=float(loss), hapi_acc1=hapi_acc1)
