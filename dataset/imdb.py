@@ -3,6 +3,7 @@ Script containing various utilities related to data processing and cleaning. Inc
 text cleaning, feature extractor (token type IDs & attention masks) for BERT, and IMDBDataset.
 """
 
+import json
 import logging
 import shutil
 import torch
@@ -43,7 +44,7 @@ class IMDB(Dataset):
     @param (torch.device) device: 'cpu' or 'gpu', decides where to store the data tensors
 
     """
-    def __init__(self, input_directory, hapi_info,tokenizer,retokenize):
+    def __init__(self, input_directory, hapi_info,tokenizer,retokenize,amazon_api):
        
         self.positive_path = os.path.join(input_directory, 'pos')
         self.positive_files = [f for f in os.listdir(self.positive_path)
@@ -58,10 +59,11 @@ class IMDB(Dataset):
 
         self.tokenizer = tokenizer
         self.retokenize = retokenize
+        self.amazon_api = amazon_api
 
         
         dic = hapi_info 
-
+        print("hapi_info: ",hapi_info)
         dic_split = dic.split('/')
         predictions =  hapi.get_predictions(task=dic_split[0], dataset=dic_split[1], date=dic_split[3], api=dic_split[2])
 
@@ -143,24 +145,47 @@ class IMDB(Dataset):
             label = torch.tensor(data=self.positive_label, dtype=torch.long)
             with open(os.path.join(self.positive_path, 'tokenized_and_encoded', file), mode='rb') as f:
                 example = pickle.load(file=f)
+            if self.amazon_api:
+                with open(os.path.join(self.positive_path, 'amazon_api', file), mode='rb') as p:
+                    amazon = json.load(p)
         elif index >= self.num_positive_examples:
             file = self.negative_files[index-self.num_positive_examples]
             label = torch.tensor(data=self.negative_label, dtype=torch.long)
             with open(os.path.join(self.negative_path, 'tokenized_and_encoded', file), mode='rb') as f:
                 example = pickle.load(file=f)
+            if self.amazon_api:
+                with open(os.path.join(self.negative_path, 'amazon_api', file), mode='rb') as p:
+                    amazon = json.load(p)
         else:
             raise ValueError('Out of range index while accessing dataset')
-        
-        
-        file_spilt = re.split('_|.txt',file)
-        hapi_id = int(file_spilt[0])*100 + int(file_spilt[1])
-        hapi_label = self.info_lb[hapi_id]
-        if hapi_label == -1:
-            raise ValueError('Out of range index while accessing dataset')
-        hapi_confidence = self.info_conf[hapi_id]
-        other_confidence = 1 - hapi_confidence
-        soft_label = torch.ones(2)*other_confidence
-        soft_label[int(hapi_label)] = hapi_confidence
 
-        # return example.input_ids[0].cuda(), example.token_type_ids[0].cuda(), example.attention_mask[0].cuda(), label.cuda(), soft_label.cuda(), hapi_label.cuda()
+        
+        if self.amazon_api:
+            soft_label = torch.ones(3)
+            soft_label[0] = amazon['SentimentScore']['Positive']
+            soft_label[1] = amazon['SentimentScore']['Negative']
+            soft_label[2] = amazon['SentimentScore']['Mixed'] + amazon['SentimentScore']['Neutral']
+            if soft_label[0] >= soft_label[1]:
+                hapi_label = torch.tensor(0)
+            else:
+                hapi_label = torch.tensor(1)  
+            # match amazon['Sentiment']:
+            #     case 'POSITIVE':
+            #         hapi_label = torch.tensor(0)
+            #     case 'NEGATIVE':
+            #         hapi_label = torch.tensor(1)
+            #     case _:
+            #         hapi_label = torch.tensor(2)
+        else:
+            file_spilt = re.split('_|.txt',file)
+            hapi_id = int(file_spilt[0])*100 + int(file_spilt[1])
+            hapi_label = self.info_lb[hapi_id]
+            if hapi_label == -1:
+                raise ValueError('Out of range index while accessing dataset')
+            hapi_confidence = self.info_conf[hapi_id]
+            other_confidence = 1 - hapi_confidence
+            soft_label = torch.zeros(3)
+            soft_label[int(hapi_label)] = hapi_confidence
+            soft_label[2] = other_confidence
+
         return example.input_ids[0], example.token_type_ids[0], example.attention_mask[0], label, soft_label, hapi_label

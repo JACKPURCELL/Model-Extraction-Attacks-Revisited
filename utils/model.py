@@ -116,6 +116,80 @@ def accuracy_fn(_output: torch.Tensor, _label: torch.Tensor, num_classes: int,
             res.append(correct_k * (100.0 / batch_size))
     return res
 
+# @torch.no_grad()
+# def amazon_accuracy_fn(_output: torch.Tensor, _label: torch.Tensor, num_classes: int,
+#              topk: Iterable[int] = (1, 5)) -> list[float]:
+#     r"""Computes the accuracy over the k top predictions
+#     for the specified values of k.
+
+#     Args:
+#         _output (torch.Tensor): The batched logit tensor with shape ``(N, C)``.
+#         _label (torch.Tensor): The batched label tensor with shape ``(N)``.
+#         num_classes (int): Number of classes.
+#         topk (~collections.abc.Iterable[int]): Which top-k accuracies to show.
+#             Defaults to ``(1, 5)``.
+
+#     Returns:
+#         list[float]: Top-k accuracies.
+#     """
+#     maxk = min(max(topk), num_classes)
+#     batch_size = _label.size(0)
+#     _output = _output[:,:2]
+#     _, pred = _output.topk(maxk, 1, True, True)
+#     pred = pred.t()
+#     correct = pred.eq(_label[None])
+#     res: list[float] = []
+#     for k in topk:
+#         if k > num_classes:
+#             res.append(100.0)
+#         else:
+#             correct_k = float(correct[:k].sum(dtype=torch.float32))
+#             res.append(correct_k * (100.0 / batch_size))
+#     return res
+
+@torch.no_grad()
+def missclassification_fn(_output: torch.Tensor, _label: torch.Tensor, hapi_label: torch.Tensor, num_classes: int,
+             topk: Iterable[int] = (1, 5)) -> list[float]:
+    r"""Computes the accuracy over the k top predictions
+    for the specified values of k.
+
+    Args:
+        _output (torch.Tensor): The batched logit tensor with shape ``(N, C)``.
+        _label (torch.Tensor): The batched label tensor with shape ``(N)``.
+        num_classes (int): Number of classes.
+        topk (~collections.abc.Iterable[int]): Which top-k accuracies to show.
+            Defaults to ``(1, 5)``.
+
+    Returns:
+        list[float]: Top-k accuracies.
+    """
+    tt = 0 #hapi true and model true
+    tf = 0 #hapi true and model false
+    ft = 0 #hapi false and model true
+    ff = 0 #hapi false and model false
+    
+    maxk = min(max(topk), num_classes)
+    batch_size = _label.size(0)
+    _, pred = _output.topk(maxk, 1, True, True)
+    pred = pred.t()
+    for i in range(batch_size):
+        if hapi_label[i] == _label[i] and pred[0][i] == _label[i]:
+            tt += 1
+        elif hapi_label[i] == _label[i] and pred[0][i] != _label[i]:
+            tf += 1
+        elif hapi_label[i] != _label[i] and pred[0][i] == _label[i]:
+            ft += 1
+        elif hapi_label[i] != _label[i] and pred[0][i] != _label[i]:
+            ff += 1
+
+    res: list[float] = []
+
+    res.append(tt * (100.0 / batch_size))
+    res.append(tf * (100.0 / batch_size))
+    res.append(ft * (100.0 / batch_size))
+    res.append(ff * (100.0 / batch_size))
+    return res
+
 def val_loss(_input: torch.Tensor = None, _label: torch.Tensor = None,
             _output: torch.Tensor = None, reduction: str = 'mean', **kwargs) -> torch.Tensor:
     
@@ -198,7 +272,7 @@ def distillation(module: nn.Module, num_classes: int,
           verbose: bool = True, output_freq: str = 'iter', indent: int = 0,
           change_train_eval: bool = True, lr_scheduler_freq: str = 'epoch',
           backward_and_step: bool = True, 
-          mixmatch: bool = False,label_train: bool=False,
+          mixmatch: bool = False,label_train: bool=False,amazon_api=False,
           **kwargs):
     r"""Train the model"""
     if epochs <= 0:
@@ -219,7 +293,8 @@ def distillation(module: nn.Module, num_classes: int,
     # if validate_interval != 0:
     #     best_validate_result = validate_fn(module=module,loader=loader_valid, 
     #                                        writer=None, tag=tag, _epoch=start_epoch,
-    #                                        verbose=verbose, indent=indent, num_classes=num_classes,label_train=label_train,**kwargs)
+    #                                        verbose=verbose, indent=indent, num_classes=num_classes,
+    #                                        label_train=label_train,amazon_api=amazon_api,**kwargs)
     #     best_acc = best_validate_result[0]
 
     params: list[nn.Parameter] = []
@@ -327,9 +402,9 @@ def distillation(module: nn.Module, num_classes: int,
                  logger.update(n=batch_size, loss=float(loss))
             else:    
                 hapi_acc1, hapi_acc5 = accuracy_fn(
-                    _output, hapi_label, num_classes=num_classes, topk=(1, 5))
+                    _output[:,:2], hapi_label, num_classes=num_classes, topk=(1, 5))
                 gt_acc1, gt_acc5 = accuracy_fn(
-                    _output, _label, num_classes=num_classes, topk=(1, 5))
+                    _output[:,:2], _label, num_classes=num_classes, topk=(1, 5))
                 batch_size = int(_label.size(0)) 
                 logger.update(n=batch_size, gt_acc1=gt_acc1,  
                             hapi_loss=float(loss), hapi_acc1=hapi_acc1)
@@ -365,6 +440,7 @@ def distillation(module: nn.Module, num_classes: int,
                                           _epoch=_epoch + start_epoch,
                                           verbose=verbose, indent=indent,
                                           label_train=label_train,
+                                          amazon_api=amazon_api,
                                           **kwargs)
             cur_acc = validate_result[0]
             if cur_acc >= best_acc:
@@ -391,7 +467,7 @@ def dis_validate(module: nn.Module, num_classes: int,
              verbose: bool = True,
              writer=None, main_tag: str = 'valid',
              tag: str = '', _epoch: int = None,
-             label_train = False,
+             label_train = False, amazon_api=False,
              **kwargs) -> tuple[float, float]:
     r"""Evaluate the model.
 
@@ -403,8 +479,13 @@ def dis_validate(module: nn.Module, num_classes: int,
     forward_fn =  module.__call__
 
     logger = MetricLogger()
-    logger.create_meters( gt_loss=None, gt_acc1=None, 
-                          hapi_loss=None, hapi_acc1=None)
+    if amazon_api:
+        logger.create_meters(gt_loss=None, gt_acc1=None, 
+                             hapi_loss=None, hapi_acc1=None)
+    else:
+        logger.create_meters( gt_loss=None, gt_acc1=None, 
+                            hapi_loss=None, hapi_acc1=None,
+                            tt=None,tf=None,ft=None,ff=None)
     loader_epoch = loader  
     if verbose:
         header: str = '{yellow}{0}{reset}'.format(print_prefix, **ansi)
@@ -430,31 +511,71 @@ def dis_validate(module: nn.Module, num_classes: int,
                 hapi_loss = float(loss_fn( _label=hapi_label, _output=_output,  **kwargs))
             else:    
                 hapi_loss = float(loss_fn( _soft_label=_soft_label, _output=_output,  **kwargs))
-            hapi_acc1, hapi_acc5 = accuracy_fn(
-                _output, hapi_label, num_classes=num_classes, topk=(1, 5))
-            gt_acc1, gt_acc5 = accuracy_fn(
-                _output, _label, num_classes=num_classes, topk=(1, 5))
+
+
+
             batch_size = int(_label.size(0))
-            logger.update(n=batch_size, gt_loss=float(gt_loss), gt_acc1=gt_acc1, 
+            if amazon_api:
+                hapi_acc1, hapi_acc5 = accuracy_fn(
+                        _output[:,:2], hapi_label, num_classes=2, topk=(1, 5))
+                gt_acc1, gt_acc5 = accuracy_fn(
+                    _output[:,:2], _label, num_classes=2, topk=(1, 5))
+                logger.update(n=batch_size,  gt_loss=float(gt_loss), gt_acc1=gt_acc1, 
                           hapi_loss=float(hapi_loss), hapi_acc1=hapi_acc1)
-            
-    gt_loss, gt_acc1, hapi_loss, hapi_acc1 = (logger.meters['gt_loss'].global_avg,
-                 logger.meters['gt_acc1'].global_avg,
+            else:
+                hapi_acc1, hapi_acc5 = accuracy_fn(
+                        _output[:,:2], hapi_label, num_classes=num_classes, topk=(1, 5))
+                tt,tf,ft,ff = missclassification_fn(_output[:,:2], _label, hapi_label,num_classes)
+                gt_acc1, gt_acc5 = accuracy_fn(
+                    _output[:,:2], _label, num_classes=num_classes, topk=(1, 5))
+                logger.update(n=batch_size, gt_loss=float(gt_loss), gt_acc1=gt_acc1, 
+                          hapi_loss=float(hapi_loss), hapi_acc1=hapi_acc1,tt=tt,tf=tf,ft=ft,ff=ff)
+    if amazon_api:
+        gt_loss, gt_acc1, hapi_loss, hapi_acc1 = (logger.meters['gt_loss'].global_avg,
+                    logger.meters['gt_acc1'].global_avg,
                  logger.meters['hapi_loss'].global_avg,
                  logger.meters['hapi_acc1'].global_avg)
+        if writer is not None and _epoch is not None and main_tag:
+            from torch.utils.tensorboard import SummaryWriter
+            assert isinstance(writer, SummaryWriter)
+            writer.add_scalars(main_tag='gt_loss/' + main_tag,
+                        tag_scalar_dict={tag: gt_loss}, global_step=_epoch)
+            writer.add_scalars(main_tag='gt_acc1/' + main_tag,
+                        tag_scalar_dict={tag: gt_acc1}, global_step=_epoch) 
+            writer.add_scalars(main_tag='hapi_loss/' + main_tag,
+                        tag_scalar_dict={tag: hapi_loss}, global_step=_epoch)
+            writer.add_scalars(main_tag='hapi_acc1/' + main_tag,
+                        tag_scalar_dict={tag: hapi_acc1}, global_step=_epoch)
 
+    else:   
+        gt_loss, gt_acc1, hapi_loss, hapi_acc1,tt,tf,ft,ff = (logger.meters['gt_loss'].global_avg,
+                    logger.meters['gt_acc1'].global_avg,
+                    logger.meters['hapi_loss'].global_avg,
+                    logger.meters['hapi_acc1'].global_avg,
+                    logger.meters['tt'].global_avg,
+                    logger.meters['tf'].global_avg,
+                    logger.meters['ft'].global_avg,
+                    logger.meters['ff'].global_avg)
 
-    if writer is not None and _epoch is not None and main_tag:
-        from torch.utils.tensorboard import SummaryWriter
-        assert isinstance(writer, SummaryWriter)
-        writer.add_scalars(main_tag='gt_loss/' + main_tag,
-                    tag_scalar_dict={tag: gt_loss}, global_step=_epoch)
-        writer.add_scalars(main_tag='gt_acc1/' + main_tag,
-                    tag_scalar_dict={tag: gt_acc1}, global_step=_epoch)        
-        writer.add_scalars(main_tag='hapi_loss/' + main_tag,
-                    tag_scalar_dict={tag: hapi_loss}, global_step=_epoch)
-        writer.add_scalars(main_tag='hapi_acc1/' + main_tag,
-                    tag_scalar_dict={tag: hapi_acc1}, global_step=_epoch)
+        if writer is not None and _epoch is not None and main_tag:
+            from torch.utils.tensorboard import SummaryWriter
+            assert isinstance(writer, SummaryWriter)
+            writer.add_scalars(main_tag='gt_loss/' + main_tag,
+                        tag_scalar_dict={tag: gt_loss}, global_step=_epoch)
+            writer.add_scalars(main_tag='gt_acc1/' + main_tag,
+                        tag_scalar_dict={tag: gt_acc1}, global_step=_epoch)        
+            writer.add_scalars(main_tag='hapi_loss/' + main_tag,
+                        tag_scalar_dict={tag: hapi_loss}, global_step=_epoch)
+            writer.add_scalars(main_tag='hapi_acc1/' + main_tag,
+                        tag_scalar_dict={tag: hapi_acc1}, global_step=_epoch)
+            writer.add_scalars(main_tag='tt/' + main_tag,
+                            tag_scalar_dict={tag: tt}, global_step=_epoch)
+            writer.add_scalars(main_tag='tf/' + main_tag,
+                            tag_scalar_dict={tag: tf}, global_step=_epoch)
+            writer.add_scalars(main_tag='ft/' + main_tag,
+                            tag_scalar_dict={tag: ft}, global_step=_epoch)
+            writer.add_scalars(main_tag='ff/' + main_tag,
+                            tag_scalar_dict={tag: ff}, global_step=_epoch)
 
     return hapi_acc1, hapi_loss
 
@@ -499,7 +620,7 @@ def train(module: nn.Module, num_classes: int,
     if validate_interval != 0:
         best_validate_result = validate_fn(module=module,loader=loader_valid, 
                                            writer=None, tag=tag, _epoch=start_epoch,
-                                           verbose=verbose, indent=indent, num_classes=num_classes,label_train=label_train,**kwargs)
+                                           verbose=verbose, indent=indent, num_classes=num_classes,**kwargs)
         best_acc = best_validate_result[0]
 
     params: list[nn.Parameter] = []

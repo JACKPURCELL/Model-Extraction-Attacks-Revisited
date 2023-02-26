@@ -17,7 +17,7 @@ from torch.utils.data import DataLoader
 from pytorch_transformers import AdamW  # Adam's optimization w/ fixed weight decay
 
 from dataset.imdb import IMDB
-from utils.model import distillation
+from utils.model import distillation,train
 from models.xlnet import XLNet
 import models
 import argparse
@@ -131,7 +131,7 @@ except:
 with open(os.path.join(log_dir,'args.txt'), mode='w') as f:
     json.dump(args.__dict__, f, indent=2)
                 
-distillation(module=model,num_classes=args.num_classes,
+train(module=model,num_classes=args.num_classes,
              validate_interval=args.validate_interval,
              epochs=args.epochs,optimizer=optimizer,
              lr_scheduler=lr_scheduler, 

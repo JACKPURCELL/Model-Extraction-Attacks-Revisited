@@ -7,7 +7,7 @@ from transformers import XLNetConfig, XLNetModel
 import torch
 
 import torchvision.models.vision_transformer as XLNet
-from transformers import XLNetTokenizer, XLNetForSequenceClassification
+from transformers import XLNetTokenizer, XLNetForSequenceClassification,AutoTokenizer
 
 import torch.nn as nn
 

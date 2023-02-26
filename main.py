@@ -42,7 +42,7 @@ parser.add_argument('--bert_weight_decay', type=float, default=0.01)
 parser.add_argument('--grad_clip', type=float, default=5.0)
 parser.add_argument('--eps', type=float, default=1e-8)
 parser.add_argument('--hapi_info', type=str, default='sa/imdb/amazon_sa/22-05-23')
-parser.add_argument('--dataset_path', type=str, default='/data/jc/data/sentiment/IMDB_new/')
+parser.add_argument('--dataset_path', type=str, default='/data/jc/data/sentiment/IMDB_hapi/')
 parser.add_argument('--model', type=str, default='xlnet-base-cased')
 parser.add_argument('--log_dir', action='store_true')
 parser.add_argument('--optimizer', type=str, default='Adam')
@@ -55,6 +55,7 @@ parser.add_argument('--validate_interval', type=int, default=1)
 parser.add_argument('--save', action='store_true')
 parser.add_argument('--label_train', action='store_true')
 parser.add_argument('--retokenize', action='store_true')
+parser.add_argument('--amazon_api', action='store_true')
 
 args = parser.parse_args()
 
@@ -81,12 +82,12 @@ torch.backends.cudnn.deterministic = True
 
 
 print(args.model.split('-')[0])
-model = getattr(models,args.model.split('-')[0])(parallel=parallel,model_name=args.model)
+model = getattr(models,args.model.split('-')[0])(parallel=parallel,model_name=args.model,num_classes=args.num_classes)
 
 # Initialize train & test datasets
-train_dataset = IMDB(input_directory=os.path.join(args.dataset_path,"aclImdb/test"),tokenizer=model.tokenizer,hapi_info=args.hapi_info,retokenize=args.retokenize)
+train_dataset = IMDB(input_directory=os.path.join(args.dataset_path,"aclImdb/test"),tokenizer=model.tokenizer,hapi_info=args.hapi_info,retokenize=args.retokenize,amazon_api=args.amazon_api)
 
-test_dataset = IMDB(input_directory=os.path.join(args.dataset_path,"aclImdb/train"),tokenizer=model.tokenizer,hapi_info=args.hapi_info,retokenize=args.retokenize)
+test_dataset = IMDB(input_directory=os.path.join(args.dataset_path,"aclImdb/train"),tokenizer=model.tokenizer,hapi_info=args.hapi_info,retokenize=args.retokenize,amazon_api=args.amazon_api)
 
 # Acquire iterators through data loaders
 train_loader = DataLoader(dataset=train_dataset,
@@ -117,9 +118,11 @@ optimizer, lr_scheduler = model.define_optimizer(
 
  
 if args.log_dir:
-    log_dir = 'runs/'+ args.hapi_info.replace('/','_')+"_ep"+str(args.epochs)+"_lr"+str(args.bert_lr)+"_bs"+str(args.batch_size)+"_"+args.optimizer+"_"+args.op_parameters+"_"+args.model
+    log_dir = 'runs/'+ args.hapi_info.replace('/','_')+"_ep"+str(args.epochs)+"_num_classes_"+str(args.num_classes)+"_lr"+str(args.bert_lr)+"_bs"+str(args.batch_size)+"_"+args.optimizer+"_"+args.op_parameters+"_"+args.model
     if args.label_train:
         log_dir += "_labeltrain"
+    if args.amazon_api:
+        log_dir += "_amazon_api_new"
 else:
     log_dir = 'runs/debug'
     
@@ -141,7 +144,7 @@ with open(os.path.join(log_dir,'args.txt'), mode='w') as f:
 # args = parser.parse_args()
 # with open('commandline_args.txt', 'r') as f:
 #     args.__dict__ = json.load(f)                  
-train(module=model,num_classes=args.num_classes,
+distillation(module=model,num_classes=args.num_classes,
              validate_interval=args.validate_interval,
              epochs=args.epochs,optimizer=optimizer,
              lr_scheduler=lr_scheduler, 
@@ -149,4 +152,5 @@ train(module=model,num_classes=args.num_classes,
              grad_clip=args.grad_clip,
              loader_train=train_loader,loader_valid=test_loader,
              mixmatch=args.mixmatch,
-             save=args.save,label_train=args.label_train)
+             save=args.save,label_train=args.label_train,
+             amazon_api=args.amazon_api)

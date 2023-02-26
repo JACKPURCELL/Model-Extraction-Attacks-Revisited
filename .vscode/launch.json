@@ -15,7 +15,7 @@
             "env":{
                 "CUDA_VISIBLE_DEVICES":"1"
             },
-            "args":["--model","xlnet-base-cased","--batch_size","1","--grad_clip","3.0","--bert_lr","5e-4"]
+            "args":["--model","xlnet-base-cased","--batch_size","4","--num_classes","3","--grad_clip","3.0","--bert_lr","5e-4","--amazon_api"]
 
 
         }
