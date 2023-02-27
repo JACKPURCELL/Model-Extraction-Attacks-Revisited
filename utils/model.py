@@ -272,7 +272,7 @@ def distillation(module: nn.Module, num_classes: int,
           verbose: bool = True, output_freq: str = 'iter', indent: int = 0,
           change_train_eval: bool = True, lr_scheduler_freq: str = 'epoch',
           backward_and_step: bool = True, 
-          mixmatch: bool = False,label_train: bool=False,amazon_api=False,
+          mixmatch: bool = False,label_train: bool=False,api=False,
           **kwargs):
     r"""Train the model"""
     if epochs <= 0:
@@ -294,7 +294,7 @@ def distillation(module: nn.Module, num_classes: int,
     #     best_validate_result = validate_fn(module=module,loader=loader_valid, 
     #                                        writer=None, tag=tag, _epoch=start_epoch,
     #                                        verbose=verbose, indent=indent, num_classes=num_classes,
-    #                                        label_train=label_train,amazon_api=amazon_api,**kwargs)
+    #                                        label_train=label_train,api=api,**kwargs)
     #     best_acc = best_validate_result[0]
 
     params: list[nn.Parameter] = []
@@ -440,7 +440,7 @@ def distillation(module: nn.Module, num_classes: int,
                                           _epoch=_epoch + start_epoch,
                                           verbose=verbose, indent=indent,
                                           label_train=label_train,
-                                          amazon_api=amazon_api,
+                                          api=api,
                                           **kwargs)
             cur_acc = validate_result[0]
             if cur_acc >= best_acc:
@@ -467,7 +467,7 @@ def dis_validate(module: nn.Module, num_classes: int,
              verbose: bool = True,
              writer=None, main_tag: str = 'valid',
              tag: str = '', _epoch: int = None,
-             label_train = False, amazon_api=False,
+             label_train = False, api=False,
              **kwargs) -> tuple[float, float]:
     r"""Evaluate the model.
 
@@ -479,7 +479,7 @@ def dis_validate(module: nn.Module, num_classes: int,
     forward_fn =  module.__call__
 
     logger = MetricLogger()
-    if amazon_api:
+    if api is not None:
         logger.create_meters(gt_loss=None, gt_acc1=None, 
                              hapi_loss=None, hapi_acc1=None)
     else:
@@ -515,7 +515,7 @@ def dis_validate(module: nn.Module, num_classes: int,
 
 
             batch_size = int(_label.size(0))
-            if amazon_api:
+            if api is not None:
                 hapi_acc1, hapi_acc5 = accuracy_fn(
                         _output[:,:2], hapi_label, num_classes=2, topk=(1, 5))
                 gt_acc1, gt_acc5 = accuracy_fn(
@@ -525,12 +525,12 @@ def dis_validate(module: nn.Module, num_classes: int,
             else:
                 hapi_acc1, hapi_acc5 = accuracy_fn(
                         _output[:,:2], hapi_label, num_classes=2, topk=(1, 5))
-                tt,tf,ft,ff = missclassification_fn(_output[:,:2], _label, hapi_label,num_classes)
+                tt,tf,ft,ff = missclassification_fn(_output[:,:2], _label, hapi_label,2)
                 gt_acc1, gt_acc5 = accuracy_fn(
                     _output[:,:2], _label, num_classes=2, topk=(1, 5))
                 logger.update(n=batch_size, gt_loss=float(gt_loss), gt_acc1=gt_acc1, 
                           hapi_loss=float(hapi_loss), hapi_acc1=hapi_acc1,tt=tt,tf=tf,ft=ft,ff=ff)
-    if amazon_api:
+    if api is not None:
         gt_loss, gt_acc1, hapi_loss, hapi_acc1 = (logger.meters['gt_loss'].global_avg,
                     logger.meters['gt_acc1'].global_avg,
                  logger.meters['hapi_loss'].global_avg,

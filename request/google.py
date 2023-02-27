@@ -2,6 +2,7 @@ import json
 import os
 
 from tqdm import trange
+
 def detect_faces(dirpath,file):
     if not os.path.exists(os.path.join(dirpath, 'google_api', file)):
         """Detects faces in an image."""
