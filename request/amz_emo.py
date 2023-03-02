@@ -9,6 +9,7 @@ from tqdm import trange
 client = boto3.client('rekognition')
 def detect_faces(dirpath,file):
     if not os.path.exists(os.path.join(dirpath, 'amazon_api', file)):
+        # print("quote")
         """Detects faces in an image."""
         path = os.path.join(dirpath, file)
 
@@ -37,10 +38,10 @@ def detect_faces(dirpath,file):
             
                 data = json.dumps(data)
                 origin = 'null'
-                with open(os.path.join(dirpath, 'amazon_api', file), mode='w') as f:
-                    f.write(data)
-                with open(os.path.join(dirpath, 'amazon_api_origin', file), mode='w') as f:
-                    f.write(origin)
+            with open(os.path.join(dirpath, 'amazon_api', file), mode='w') as f:
+                f.write(data)
+            with open(os.path.join(dirpath, 'amazon_api_origin', file), mode='w') as f:
+                f.write(origin)
             
 
 

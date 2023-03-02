@@ -17,12 +17,12 @@ def authenticate_client():
     ta_credential = AzureKeyCredential(language_key)
     text_analytics_client = TextAnalyticsClient(
             endpoint=language_endpoint, 
-            credential=ta_credential,model_version='2022-11-01')
+            credential=ta_credential,model_version='2021-10-01')
     return text_analytics_client
 
 client = authenticate_client()
 # (positive=0.54, neutral=0.06, negative=0.4) result[0].sentiment result[0].confidence_scores.positive SentimentConfidenceScores(positive=0.54, neutral=0.06, negative=0.4)
-# Sentiment Analysis and opinion mining	2021-10-01, 2022-06-01,2022-10-01,2022-11-01*
+# Sentiment Analysis and opinion mining	2021-10-01, 2022-06-01,2022-10-01,2021-10-01*
 # Example method for detecting sentiment and opinions in text 
 def sentiment_analysis(documents):
 
@@ -44,8 +44,8 @@ def sentiment_analysis(documents):
     return data,result
    
           
-mic_api_path = 'mic_api_2022-11-01'
-mic_api_ori_path = 'mic_api_ori_2022-11-01'
+mic_api_path = 'mic_api_2021-10-01'
+mic_api_ori_path = 'mic_api_ori_2021-10-01'
 
 
 input_directory = '/data/jc/data/sentiment/IMDB/aclImdb/train'
