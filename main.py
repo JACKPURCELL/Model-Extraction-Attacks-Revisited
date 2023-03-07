@@ -130,6 +130,7 @@ parser.add_argument('--label_train', action='store_true')
 parser.add_argument('--retokenize', action='store_true')
 parser.add_argument('--split_unlabel_percent', type=float, default=0.0)
 parser.add_argument('--split_label_percent', type=float, default=1.0)
+parser.add_argument('--balance', action='store_true')
 
 parser.add_argument('--api', type=str)
 
@@ -175,6 +176,22 @@ elif args.dataset == 'rafdb':
     train_dataset = RAFDB(input_directory=os.path.join('/data/jc/data/image/RAFDB',"train"),hapi_data_dir=args.hapi_data_dir,hapi_info=args.hapi_info,api=args.api)
     test_dataset = RAFDB(input_directory=os.path.join('/data/jc/data/image/RAFDB',"valid"),hapi_data_dir=args.hapi_data_dir,hapi_info=args.hapi_info,api=args.api)
     task = 'emotion'
+    
+def get_sampler(train_dataset):
+    from collections import Counter
+    from torch.utils.data.sampler import WeightedRandomSampler    
+    class_counts = []
+    result = Counter(train_dataset.targets) 
+    for i in range(len(result)):
+        class_counts.append(result[i])
+
+    num_samples = sum(class_counts)
+    labels = train_dataset.targets #corresponding labels of samples
+
+    class_weights = [num_samples/class_counts[i] for i in range(len(class_counts))]
+    weights = [class_weights[labels[i]] for i in range(int(num_samples))]
+    return WeightedRandomSampler(torch.DoubleTensor(weights), int(num_samples))
+
 
 if args.split_unlabel_percent != 0.0:
 
@@ -190,10 +207,15 @@ if args.split_unlabel_percent != 0.0:
     
     _unlabel_dataset = Subset(RAFDB(input_directory=os.path.join('/data/jc/data/image/RAFDB',"train"),hapi_data_dir=args.hapi_data_dir,hapi_info=args.hapi_info,api=args.api,transform = 'mixmatch'),
                                 _temp_unlabel_dataset.indices)
-
+    if args.balance:
+        sampler=get_sampler(_label_dataset)
+        shuffle = False
+    else:
+        sampler=None
+        shuffle = True
     train_loader = DataLoader(dataset=_label_dataset,
                     batch_size=args.batch_size,
-                    shuffle=True,
+                    shuffle=shuffle,sampler=sampler,
                     num_workers=args.num_workers,drop_last=True)
     _unlabel_dataloader = DataLoader(dataset=_unlabel_dataset,
                     batch_size=args.batch_size,
@@ -202,19 +224,32 @@ if args.split_unlabel_percent != 0.0:
     
     
 elif args.split_label_percent != 1.0:
+    
     _label_dataset, _ = split_dataset(
         train_dataset,
         percent=args.split_label_percent)
+    if args.balance:
+        sampler=get_sampler(_label_dataset)
+        shuffle = False
+    else:
+        sampler=None
+        shuffle = True
     train_loader = DataLoader(dataset=_label_dataset,
                     batch_size=args.batch_size,
-                    shuffle=True,
+                    shuffle=shuffle,sampler=sampler,
                     num_workers=args.num_workers,drop_last=True)
     unlabel_iterator = None
 
 else:
+    if args.balance:
+        sampler=get_sampler(train_dataset)
+        shuffle = False
+    else:
+        sampler=None
+        shuffle = True
     train_loader = DataLoader(dataset=train_dataset,
                     batch_size=args.batch_size,
-                    shuffle=True,
+                    shuffle=shuffle,sampler=sampler,
                     num_workers=args.num_workers,drop_last=True)
     unlabel_iterator = None
     
@@ -253,6 +288,8 @@ if args.log_dir:
         log_dir += args.api
     if args.mixmatch:
         log_dir += "_mixmatch"
+    if args.balance:
+        log_dir += "_balance"
 
 else:
     log_dir = 'runs/debug'

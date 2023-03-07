@@ -932,7 +932,6 @@ def train_validate(module: nn.Module, num_classes: int,
         _label = _label.cuda()
         _soft_label = _soft_label.cuda()
         hapi_label = hapi_label.cuda()
-        
 
         with torch.no_grad():
             _output = forward_fn(input_ids=input_ids,token_type_ids=token_type_ids,attention_mask=attention_mask)
