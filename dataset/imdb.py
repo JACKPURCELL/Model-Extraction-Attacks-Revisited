@@ -21,7 +21,6 @@ from nltk.corpus import stopwords
 stop_words = set(stopwords.words('english'))
 lemmatizer = WordNetLemmatizer()
 import hapi
-hapi.config.data_dir = "/home/jkl6486/HAPI" 
 
 
 
@@ -44,8 +43,9 @@ class IMDB(Dataset):
     @param (torch.device) device: 'cpu' or 'gpu', decides where to store the data tensors
 
     """
-    def __init__(self, input_directory, hapi_info,tokenizer,retokenize,api,max_length):
+    def __init__(self, input_directory,hapi_data_dir, hapi_info,tokenizer,retokenize,api,max_length):
        
+        hapi.config.data_dir = hapi_data_dir
         self.positive_path = os.path.join(input_directory, 'pos')
         self.positive_files = [f for f in os.listdir(self.positive_path)
                                if os.path.isfile(os.path.join(self.positive_path, f))]

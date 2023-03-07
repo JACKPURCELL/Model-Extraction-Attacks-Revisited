@@ -5,6 +5,9 @@
     "version": "0.2.0",
     "configurations": [
 
+
+
+
         {
             "name": "main.py",
             "type": "python",
@@ -13,11 +16,40 @@
             "console": "integratedTerminal",
             "justMyCode": true,
             "env":{
-                "CUDA_VISIBLE_DEVICES":"1"
+                "CUDA_VISIBLE_DEVICES":"3"
             },
             "args":["--model","xlnet-base-cased","--batch_size","4","--num_classes","3","--grad_clip","3.0","--bert_lr","5e-4","--api","microsoft"]
 
 
+        },        
+        {
+            "name": "mainresnet.py",
+            "type": "python",
+            "request": "launch",
+            "program": "main.py",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "env":{
+                "CUDA_VISIBLE_DEVICES":"3"
+            },
+            "args":["--log_dir","--batch_size","256","--model","resnet50","--grad_clip","3.0","--lr","3e-5","--op_parameters","full","--validate_interval","1","--num_classes","7","--dataset","rafdb","--hapi_info","fer/rafdb/microsoft_fer/22-05-23"]
+
+
+        },
+        {
+            "name": "mainresnetmixmatch.py",
+            "type": "python",
+            "request": "launch",
+            "program": "main.py",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "env":{
+                "CUDA_VISIBLE_DEVICES":"0"
+            },
+            "args":["--log_dir","--batch_size","256","--model","resnet50","--grad_clip","3.0","--lr","3e-5","--op_parameters","full","--validate_interval","1","--num_classes","7","--dataset","rafdb","--hapi_info","fer/rafdb/microsoft_fer/22-05-23","--mixmatch","--split_unlabel_percent","0.45","--split_label_percent","0.05"]
+
+
         }
+    
     ]
 }

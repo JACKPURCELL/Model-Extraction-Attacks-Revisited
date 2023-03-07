@@ -16,6 +16,63 @@ from .logger import MetricLogger
 from .output import ansi, get_ansi_len, output_iter, prints
 from torch.utils.tensorboard import SummaryWriter
 
+
+def mixmatch_get_data(data,forward_fn,unlabel_iterator):
+    r"""Process data. Defaults to be :attr:`self.dataset.get_data`.
+    If :attr:`self.dataset` is ``None``, return :attr:`data` directly.
+
+    Args:
+        data (Any): Unprocessed data.
+        **kwargs: Keyword arguments passed to
+            :attr:`self.dataset.get_data()`.
+
+    Returns:
+        Any: Processed data.
+    """
+    #TODO:MODE
+
+
+    T: float = 0.5
+    alpha: float = 0.75
+    mixmatch: bool = False
+    lambda_u: float = 100.0
+    _input, _label, _soft_label, hapi_label = data
+    _input = _input.cuda()
+    _soft_label = _soft_label.cuda()
+    _label = _label.cuda()
+    hapi_label = hapi_label.cuda()
+    (inputs_u, inputs_u2), _, _, _ = next(unlabel_iterator)
+    inputs_u = inputs_u.cuda()
+    inputs_u2 = inputs_u2.cuda()
+    
+    with torch.no_grad():
+        # compute guessed labels of unlabel samples
+        outputs_u = forward_fn(inputs_u)
+        outputs_u2 = forward_fn(inputs_u2)
+        p = (torch.softmax(outputs_u, dim=1) + torch.softmax(outputs_u2, dim=1)) / 2
+        pt = p**(1/T)
+        targets_u = pt / pt.sum(dim=1, keepdim=True)
+        targets_u = targets_u.detach()
+
+    # mixup
+    all_inputs = torch.cat([_input, inputs_u, inputs_u2], dim=0)
+    all_targets = torch.cat([_soft_label, targets_u, targets_u], dim=0)
+
+    l = np.random.beta(alpha, alpha)
+
+    l = max(l, 1-l)
+
+    idx = torch.randperm(all_inputs.size(0))
+
+    input_a, input_b = all_inputs, all_inputs[idx]
+    target_a, target_b = all_targets, all_targets[idx]
+
+    mixed_input = l * input_a + (1 - l) * input_b
+    mixed_target = l * target_a + (1 - l) * target_b
+    
+    return mixed_input, mixed_target, _input.shape[0]
+
+    
 @torch.no_grad()
 def save_fn( file_path: str = None, folder_path: str = None,
             suffix: str = None, component: str = '',
@@ -63,9 +120,19 @@ def save_fn( file_path: str = None, folder_path: str = None,
         prints(
             f'Model {self.name} saved at: {file_path}', indent=indent)
         
-def interleave_fn(self, xy, batch):
+ 
+def interleave_offsets(batch, nu):
+    groups = [batch // (nu + 1)] * (nu + 1)
+    for x in range(batch - sum(groups)):
+        groups[-x - 1] += 1
+    offsets = [0]
+    for g in groups:
+        offsets.append(offsets[-1] + g)
+    assert offsets[-1] == batch
+    return offsets       
+def interleave_fn(xy, batch):
     nu = len(xy) - 1
-    offsets = self.interleave_offsets(batch, nu)
+    offsets = interleave_offsets(batch, nu)
     xy = [[v[offsets[p]:offsets[p + 1]] for p in range(nu + 1)] for v in xy]
     for i in range(1, nu + 1):
         xy[0][i], xy[i][i] = xy[i][i], xy[0][i]
@@ -265,6 +332,7 @@ def distillation(module: nn.Module, num_classes: int,
           validate_interval: int = 1, save: bool = True,
           loader_train: torch.utils.data.DataLoader = None,
           loader_valid: torch.utils.data.DataLoader = None,
+          unlabel_iterator = None,
         file_path: str = None,
           folder_path: str = None, suffix: str = None,
            main_tag: str = 'train', tag: str = '',
@@ -272,7 +340,7 @@ def distillation(module: nn.Module, num_classes: int,
           verbose: bool = True, output_freq: str = 'iter', indent: int = 0,
           change_train_eval: bool = True, lr_scheduler_freq: str = 'epoch',
           backward_and_step: bool = True, 
-          mixmatch: bool = False,label_train: bool=False,api=False,
+          mixmatch: bool = False,label_train: bool=False,api=False,task='sentiment',
           **kwargs):
     r"""Train the model"""
     if epochs <= 0:
@@ -307,7 +375,7 @@ def distillation(module: nn.Module, num_classes: int,
     if mixmatch:
         logger.create_meters(loss=None)
     else:
-        logger.create_meters(  gt_loss=None, gt_acc1=None, 
+        logger.create_meters(   gt_acc1=None, 
                           hapi_loss=None, hapi_acc1=None)
     if resume and lr_scheduler:
         for _ in range(resume):
@@ -348,41 +416,64 @@ def distillation(module: nn.Module, num_classes: int,
 
         for i, data in enumerate(loader_epoch):
             _iter = _epoch * len_loader_train + i
+            match task:
+                case 'emotion':
+                    if mixmatch:
+                        mixed_input, mixed_target, batch_size = mixmatch_get_data(data,forward_fn,unlabel_iterator)
 
-            if mixmatch:
-                print('no mixmatch support') 
-                # input_ids, token_type_ids, attention_mask, label, soft_label, hapi_label  = data
+                        # interleave labeled and unlabed samples between batches to get correct batchnorm calculation 
+                        mixed_input = list(torch.split(mixed_input, batch_size))
+                        mixed_input = interleave_fn(mixed_input, batch_size)
 
+                        logits = [forward_fn(mixed_input[0])]
+                        for input in mixed_input[1:]:
+                            logits.append(forward_fn(input))
 
-                # mixed_input = list(torch.split(mixed_input, batch_size))
-                # mixed_input = interleave_fn(mixed_input, batch_size)
+                        # put interleaved samples back
+                        logits = interleave_fn(logits, batch_size)
+                        logits_x = logits[0]
+                        logits_u = torch.cat(logits[1:], dim=0)
 
-                # logits = [forward_fn(mixed_input[0])]
-                # for input in mixed_input[1:]:
-                #     logits.append(forward_fn(input))
+                        loss = loss_fn(outputs_x = logits_x, targets_x = mixed_target[:batch_size], outputs_u = logits_u, targets_u = mixed_target[batch_size:], iter = _iter)
 
-                # # put interleaved samples back
-                # logits = interleave_fn(logits, batch_size)
-                # logits_x = logits[0]
-                # logits_u = torch.cat(logits[1:], dim=0)
+                    # elif adaptive:
+                    #     _input, _label, _soft_label, hapi_label  = data
+                    #     _input = _input.cuda()
+                    #     _soft_label = _soft_label.cuda()
+                    #     _label = _label.cuda()
+                    #     hapi_label = hapi_label.cuda()
+                    #     _output = forward_fn(_input)
+                    #     if label_train:
+                    #         loss = loss_fn( _label=hapi_label, _output=_output)
+                    #     else:
+                    #         loss = loss_fn( _soft_label=_soft_label, _output=_output)
+        
+                    else:
+                        _input, _label, _soft_label, hapi_label  = data
+                        _input = _input.cuda()
+                        _soft_label = _soft_label.cuda()
+                        _label = _label.cuda()
+                        hapi_label = hapi_label.cuda()
+                        _output = forward_fn(_input)
+                        if label_train:
+                            loss = loss_fn( _label=hapi_label, _output=_output)
+                        else:
+                            loss = loss_fn( _soft_label=_soft_label, _output=_output)
 
-                # loss = loss_fn(outputs_x = logits_x, targets_x = mixed_target[:batch_size], outputs_u = logits_u, targets_u = mixed_target[batch_size:], iter = _iter)
+                case 'sentiment':
+                    input_ids, token_type_ids, attention_mask, _label, _soft_label, hapi_label  = data
+                    input_ids = input_ids.cuda()
+                    token_type_ids = token_type_ids.cuda()
+                    attention_mask = attention_mask.cuda()
+                    _label = _label.cuda()
+                    _soft_label = _soft_label.cuda()
+                    hapi_label = hapi_label.cuda()
 
-
-            else:
-                input_ids, token_type_ids, attention_mask, _label, _soft_label, hapi_label  = data
-                input_ids = input_ids.cuda()
-                token_type_ids = token_type_ids.cuda()
-                attention_mask = attention_mask.cuda()
-                _label = _label.cuda()
-                _soft_label = _soft_label.cuda()
-                hapi_label = hapi_label.cuda()
-
-                _output = forward_fn(input_ids=input_ids,token_type_ids=token_type_ids,attention_mask=attention_mask)
-                if label_train:
-                    loss = loss_fn( _label=hapi_label, _output=_output)
-                else:
-                    loss = loss_fn( _soft_label=_soft_label, _output=_output)
+                    _output = forward_fn(input_ids=input_ids,token_type_ids=token_type_ids,attention_mask=attention_mask)
+                    if label_train:
+                        loss = loss_fn( _label=hapi_label, _output=_output)
+                    else:
+                        loss = loss_fn( _soft_label=_soft_label, _output=_output)
                     
             if backward_and_step:
                 optimizer.zero_grad()
@@ -401,10 +492,16 @@ def distillation(module: nn.Module, num_classes: int,
             if mixmatch:
                  logger.update(n=batch_size, loss=float(loss))
             else:    
+                match task:
+                    case 'sentiment':
+                        _output = _output[:,:2]
+                        new_num_classes = 2
+                    case 'emotion':
+                        new_num_classes = num_classes
                 hapi_acc1, hapi_acc5 = accuracy_fn(
-                    _output[:,:2], hapi_label, num_classes=2, topk=(1, 5))
+                    _output, hapi_label, num_classes=new_num_classes, topk=(1, 5))
                 gt_acc1, gt_acc5 = accuracy_fn(
-                    _output[:,:2], _label, num_classes=2, topk=(1, 5))
+                    _output, _label, num_classes=new_num_classes, topk=(1, 5))
                 batch_size = int(_label.size(0)) 
                 logger.update(n=batch_size, gt_acc1=gt_acc1,  
                             hapi_loss=float(loss), hapi_acc1=hapi_acc1)
@@ -440,7 +537,7 @@ def distillation(module: nn.Module, num_classes: int,
                                           _epoch=_epoch + start_epoch,
                                           verbose=verbose, indent=indent,
                                           label_train=label_train,
-                                          api=api,
+                                          api=api,task=task,
                                           **kwargs)
             cur_acc = validate_result[0]
             if cur_acc >= best_acc:
@@ -467,7 +564,7 @@ def dis_validate(module: nn.Module, num_classes: int,
              verbose: bool = True,
              writer=None, main_tag: str = 'valid',
              tag: str = '', _epoch: int = None,
-             label_train = False, api=False,
+             label_train = False, api=False,task=None,
              **kwargs) -> tuple[float, float]:
     r"""Evaluate the model.
 
@@ -494,18 +591,29 @@ def dis_validate(module: nn.Module, num_classes: int,
                                         tqdm_header='Batch',
                                         indent=indent)
     for data in loader_epoch:
-
-        input_ids, token_type_ids, attention_mask, _label, _soft_label, hapi_label  = data
-        input_ids = input_ids.cuda()
-        token_type_ids = token_type_ids.cuda()
-        attention_mask = attention_mask.cuda()
-        _label = _label.cuda()
-        _soft_label = _soft_label.cuda()
-        hapi_label = hapi_label.cuda()
-        
-
         with torch.no_grad():
-            _output = forward_fn(input_ids=input_ids,token_type_ids=token_type_ids,attention_mask=attention_mask)
+            match task:
+                case 'emotion':
+
+                    _input, _label, _soft_label, hapi_label  = data
+                    _input = _input.cuda()
+                    _soft_label = _soft_label.cuda()
+                    _label = _label.cuda()
+                    hapi_label = hapi_label.cuda()
+                    _output = forward_fn(_input)
+
+
+                case 'sentiment':
+                    input_ids, token_type_ids, attention_mask, _label, _soft_label, hapi_label  = data
+                    input_ids = input_ids.cuda()
+                    token_type_ids = token_type_ids.cuda()
+                    attention_mask = attention_mask.cuda()
+                    _label = _label.cuda()
+                    _soft_label = _soft_label.cuda()
+                    hapi_label = hapi_label.cuda()
+
+                    _output = forward_fn(input_ids=input_ids,token_type_ids=token_type_ids,attention_mask=attention_mask)
+        
             gt_loss = float(loss_fn( _label=_label, _output=_output, **kwargs))
             if label_train:
                 hapi_loss = float(loss_fn( _label=hapi_label, _output=_output,  **kwargs))
@@ -515,19 +623,25 @@ def dis_validate(module: nn.Module, num_classes: int,
 
 
             batch_size = int(_label.size(0))
+            match task:
+                case 'sentiment':
+                    _output = _output[:,:2]
+                    new_num_classes = 2
+                case 'emotion':
+                    new_num_classes = num_classes
             if api is not None:
                 hapi_acc1, hapi_acc5 = accuracy_fn(
-                        _output[:,:2], hapi_label, num_classes=2, topk=(1, 5))
+                        _output, hapi_label, num_classes=new_num_classes, topk=(1, 5))
                 gt_acc1, gt_acc5 = accuracy_fn(
-                    _output[:,:2], _label, num_classes=2, topk=(1, 5))
+                    _output, _label, num_classes=new_num_classes, topk=(1, 5))
                 logger.update(n=batch_size,  gt_loss=float(gt_loss), gt_acc1=gt_acc1, 
                           hapi_loss=float(hapi_loss), hapi_acc1=hapi_acc1)
             else:
                 hapi_acc1, hapi_acc5 = accuracy_fn(
-                        _output[:,:2], hapi_label, num_classes=2, topk=(1, 5))
-                tt,tf,ft,ff = missclassification_fn(_output[:,:2], _label, hapi_label,2)
+                       _output, hapi_label, num_classes=new_num_classes, topk=(1, 5))
+                tt,tf,ft,ff = missclassification_fn(_output, _label, hapi_label,new_num_classes)
                 gt_acc1, gt_acc5 = accuracy_fn(
-                    _output[:,:2], _label, num_classes=2, topk=(1, 5))
+                    _output, _label, num_classes=new_num_classes, topk=(1, 5))
                 logger.update(n=batch_size, gt_loss=float(gt_loss), gt_acc1=gt_acc1, 
                           hapi_loss=float(hapi_loss), hapi_acc1=hapi_acc1,tt=tt,tf=tf,ft=ft,ff=ff)
     if api is not None:

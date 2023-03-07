@@ -1,0 +1,230 @@
+# -*- coding: utf-8 -*-
+import argparse
+import json
+import os
+import cv2
+import numpy as np
+import torch
+import torch.utils.data as data
+import pandas as pd
+import random
+from torchvision import transforms
+import torchvision.datasets as datasets
+from typing import Any, Callable, cast, Dict, List, Optional, Tuple
+from typing import Union
+import re
+
+import hapi
+# hapi.config.data_dir = "/home/ljc/HAPI" 
+
+def get_transform_base(mode: str, use_tuple: bool = False,
+                           auto_augment: bool = False, crop_shape = 100,norm_par=None) -> transforms.Compose:
+    if mode == 'train':
+        transform_list = [
+            transforms.RandomResizedCrop((crop_shape, crop_shape) if use_tuple else crop_shape),
+            transforms.RandomHorizontalFlip(),
+            # transforms.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.4), # noqa
+        ]
+        if auto_augment:
+            transform_list.append(transforms.AutoAugment(
+                transforms.AutoAugmentPolicy.IMAGENET))
+        transform_list.append(transforms.PILToTensor())
+        transform_list.append(transforms.ConvertImageDtype(torch.float))
+        transform = transforms.Compose(transform_list)
+    else:
+        # TODO: torchvision.prototypes.transforms._presets.ImageClassificationEval
+        transform = transforms.Compose([
+            transforms.Resize((crop_shape, crop_shape) if use_tuple else crop_shape),
+            transforms.CenterCrop((crop_shape, crop_shape) if use_tuple else crop_shape),
+            transforms.PILToTensor(),
+            transforms.ConvertImageDtype(torch.float)])
+    if norm_par is not None:
+                transform.transforms.append(transforms.Normalize(
+                mean=norm_par['mean'], std=norm_par['std']))
+    return transform
+
+class TransformTwice:
+    def __init__(self, transform):
+        self.transform = transform
+
+    def __call__(self, inp):
+        out1 = self.transform(inp)
+        out2 = self.transform(inp)
+        return out1, out2
+       
+class RAFDB(datasets.ImageFolder):
+    
+    def __init__(self, input_directory=None, hapi_data_dir:str = None, hapi_info:str = None, api=None,transform='Normal'):
+        mode = input_directory.split('/')[-1]
+        if mode == 'valid':
+            mode = 'test'
+        if transform == 'Normal':
+            transform = get_transform_base(
+                mode, use_tuple=True,
+                auto_augment=False, crop_shape = 100,
+                norm_par={'mean': [0.485, 0.456, 0.406],'std': [0.229, 0.224, 0.225]})
+        elif transform == 'mixmatch':
+            transform = get_transform_base(
+                mode, use_tuple=True,
+                auto_augment=False, crop_shape = 100,
+                norm_par={'mean': [0.485, 0.456, 0.406],'std': [0.229, 0.224, 0.225]})
+            transform = TransformTwice(transform)
+            
+        super().__init__(root=input_directory,transform=transform)
+        hapi.config.data_dir = hapi_data_dir
+        self.api = api
+
+
+        dic = hapi_info 
+
+        dic_split = dic.split('/')
+        predictions =  hapi.get_predictions(task=dic_split[0], dataset=dic_split[1], date=dic_split[3], api=dic_split[2])
+
+        self.info_lb = torch.zeros(len(self.targets) + 1,dtype=torch.long)
+        self.info_conf = torch.zeros(len(self.targets) + 1)
+
+        for i in range(len(predictions[dic])):
+            hapi_mode = predictions[dic][i]['example_id'].split('_')[0]
+            hapi_id = int(predictions[dic][i]['example_id'].split('_')[1])
+            if hapi_mode == mode:
+                self.info_lb[hapi_id] = torch.tensor((predictions[dic][i]['predicted_label']))
+                temp = predictions[dic][i]['confidence']
+                # if temp >= 0.0 and temp < 0.1:
+                #     temp = 0.0
+                # elif temp >= 0.1 and temp < 0.3:
+                #     temp = 0.2
+                # elif temp >= 0.3 and temp < 0.5:
+                #     temp = 0.4
+                # elif temp >= 0.5 and temp < 0.7:
+                #     temp = 0.6
+                # elif temp >= 0.7 and temp < 0.9:
+                #     temp = 0.8
+                # elif temp >= 0.9 and temp < 1.0:
+                #     temp = 1.0
+                self.info_conf[hapi_id] = torch.tensor((temp))
+
+    
+    def __getitem__(self, index: int) -> Tuple[Any, Any]:
+        """
+        Args:
+            index (int): Index
+
+        Returns:
+            tuple: (sample, target) where target is class_index of the target class.
+        """
+        path, target = self.samples[index]
+        sample = self.loader(path)
+        match self.api:
+            case 'amazon':
+                with open(os.path.join('/data/jc/data/image/RAFDB', 'amazon_api', path.split('/')[-1]), mode='r') as p:
+                    api_result = json.load(p)
+
+        if self.transform is not None:
+            sample = self.transform(sample)
+        if self.target_transform is not None:
+            target = self.target_transform(target)
+        match self.api:
+            case 'amazon':
+                soft_label = torch.ones(7)
+                if len(api_result[0]) != 1:
+                    soft_label[0] = api_result[0]['ANGRY']*0.01
+                    soft_label[1] = api_result[0]['DISGUSTED']*0.01
+                    soft_label[2] = api_result[0]['FEAR']*0.01
+                    soft_label[3] = api_result[0]['HAPPY']*0.01
+                    soft_label[4] = api_result[0]['SAD']*0.01
+                    soft_label[5] = api_result[0]['SURPRISED']*0.01
+                    soft_label[6] = api_result[0]['CALM']*0.01 + api_result[0]['CONFUSED']*0.01
+                    # soft_label[7] = api_result[0]['CONFUSED']
+
+                    hapi_label = torch.argmax(soft_label)
+                else:
+                    soft_label = torch.ones(7)*0.14285714285714285
+                    hapi_label = torch.tensor(6)
+                    
+  
+            # case 'microsoft':
+            #     soft_label = torch.ones(3)
+            #     soft_label[0] = api_result[0]['positive']
+            #     soft_label[1] = api_result[0]['negative']
+            #     soft_label[2] = api_result[0]['neutral']
+            #     if soft_label[0] >= soft_label[1]:
+            #         hapi_label = torch.tensor(0)
+            #     else:
+            #         hapi_label = torch.tensor(1)
+            case _:
+                hapi_id = torch.tensor(int(re.findall(r'_(.*).jpg', path)[0]))
+                hapi_label = self.info_lb[hapi_id]
+                hapi_confidence = self.info_conf[hapi_id]
+                other_confidence = (1 - hapi_confidence)/6
+                soft_label = torch.ones(7)*other_confidence
+                soft_label[int(hapi_label)] = hapi_confidence
+
+        
+        return sample, target, soft_label, hapi_label
+    
+# class RAF(ImageFolder):
+#     name = 'RAFDB'
+#     num_classes = 7
+#     data_shape = [3,100,100]
+#     @classmethod
+#     def add_argument(cls, group: argparse._ArgumentGroup):
+#         r"""Add image dataset arguments to argument parser group.
+#         View source to see specific arguments.
+
+#         Note:
+#             This is the implementation of adding arguments.
+#             The concrete dataset class may override this method to add more arguments.
+#             For users, please use :func:`add_argument()` instead, which is more user-friendly.
+
+#         See Also:
+#             :meth:`trojanvision.datasets.ImageSet.add_argument()`
+#         """
+#         super().add_argument(group)
+#         group.add_argument('--hapi_data_dir', 
+#                            help='hapi_data_dir')
+#         group.add_argument('--hapi_info', 
+#                            help='hapi_info')
+#         group.add_argument('--api', 
+#                            help='hapi_info')
+#         return group
+    
+#     def __init__(self, hapi_data_dir:str = None, hapi_info:str = None, norm_par: dict[str, list[float]] = {'mean': [0.485, 0.456, 0.406],
+#                                                            'std': [0.229, 0.224, 0.225]}, api=None, **kwargs):
+#         self.hapi_data_dir = hapi_data_dir
+#         self.hapi_info = hapi_info
+#         self.api=api
+#         super().__init__(norm_par=norm_par, **kwargs)
+
+#     def _get_org_dataset(self, mode: str, data_format: str = None,
+#                          **kwargs) -> datasets.DatasetFolder:
+#         data_format = data_format or self.data_format
+#         root = os.path.join(self.folder_path, mode)
+#         DatasetClass = _RAF
+#         if data_format == 'zip':
+#             root = os.path.join(self.folder_path,
+#                                 f'{self.name}_{mode}_store.zip')
+#             DatasetClass = ZipFolder
+#             if 'memory' not in kwargs.keys():
+#                 kwargs['memory'] = self.memory
+#         return DatasetClass(root=root, hapi_data_dir=self.hapi_data_dir, hapi_info=self.hapi_info, mode=mode,api=self.api, **kwargs)
+    
+#     def get_data(self, data: tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor],
+#                 **kwargs) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+#         r"""Process image data.
+#         Defaults to put input and label on ``env['device']`` with ``non_blocking``
+#         and transform label to ``torch.LongTensor``.
+
+#         Args:
+#             data (tuple[torch.Tensor, torch.Tensor]): Tuple of batched input and label.
+#             **kwargs: Any keyword argument (unused).
+
+#         Returns:
+#             (tuple[torch.Tensor, torch.Tensor]):
+#                 Tuple of batched input and label on ``env['device']``.
+#                 Label is transformed to ``torch.LongTensor``.
+#         """
+
+#         return (data[0].to(env['device'], non_blocking=True),
+#             data[1].to(env['device'], dtype=torch.long, non_blocking=True),
+#             data[2].to(env['device'], non_blocking=True),
+#             data[3].to(env['device'], dtype=torch.long, non_blocking=True))
