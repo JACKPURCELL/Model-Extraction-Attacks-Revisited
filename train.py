@@ -36,7 +36,7 @@ parser.add_argument('--bert_lr', type=float, default=5e-5)
 parser.add_argument('--lr_warmup_percent', type=float, default=0.1)
 # parser.add_argument('--custom_lr', type=float, default=1e-3)
 parser.add_argument('--betas', type=tuple, default=(0.9, 0.999))
-parser.add_argument('--bert_weight_decay', type=float, default=0.01)
+parser.add_argument('--weight_decay', type=float, default=0.01)
 parser.add_argument('--grad_clip', type=float, default=5.0)
 parser.add_argument('--eps', type=float, default=1e-8)
 parser.add_argument('--hapi_info', type=str, default='sa/imdb/amazon_sa/22-05-23')
@@ -103,7 +103,7 @@ test_loader = DataLoader(dataset=test_dataset,
 optimizer, lr_scheduler = model.define_optimizer(
         parameters=args.op_parameters,
         OptimType=args.optimizer,
-        lr=args.bert_lr,weight_decay=args.bert_weight_decay,
+        lr=args.bert_lr,weight_decay=args.weight_decay,
         lr_scheduler=args.lr_scheduler,
         epochs=args.epochs, 
         lr_warmup_percent=args.lr_warmup_percent, 

@@ -7,6 +7,7 @@ import torchvision.models
 from torchvision.models.resnet import model_urls as urls
 from torchvision.models.resnet import conv3x3
 from collections import OrderedDict
+from optimizer.lion import Lion
 
 from torch.optim.optimizer import Optimizer
 from torch.optim.lr_scheduler import _LRScheduler
@@ -113,7 +114,10 @@ class ViT(nn.Module):
                 The tuple of optimizer and lr_scheduler.
         """
         if isinstance(OptimType, str):
-            OptimType: type[Optimizer] = getattr(torch.optim, OptimType)
+            if OptimType == 'Lion':
+                OptimType = Lion
+            else:
+                OptimType: type[Optimizer] = getattr(torch.optim, OptimType)
         match parameters:
             # case 'classifier' | 'partial':
             #     bert_identifiers = ['transformer']

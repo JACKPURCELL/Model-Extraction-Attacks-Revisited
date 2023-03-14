@@ -13,6 +13,7 @@ from torch.optim.lr_scheduler import _LRScheduler
 import torch.utils.data
 from typing import Generator, Iterator, Mapping
 from collections.abc import Iterable
+from optimizer.lion import Lion
 class ResNet(nn.Module):
 
     def __init__(self, model_name: str = 'resnet50',num_classes=7,parallel=True):
@@ -101,7 +102,10 @@ class ResNet(nn.Module):
                 The tuple of optimizer and lr_scheduler.
         """
         if isinstance(OptimType, str):
-            OptimType: type[Optimizer] = getattr(torch.optim, OptimType)
+            if OptimType == 'Lion':
+                OptimType = Lion
+            else:
+                OptimType: type[Optimizer] = getattr(torch.optim, OptimType)
         match parameters:
 
             case 'full':

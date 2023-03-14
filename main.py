@@ -105,16 +105,16 @@ parser.add_argument('--max_length', type=int, default=128)
 parser.add_argument('--epochs', type=int, default=4)
 parser.add_argument('--num_classes', type=int, default=2)
 parser.add_argument('--num_workers', type=int, default=8)
-parser.add_argument('--lr', type=float, default=5e-5)
+parser.add_argument('--lr', type=float)
 parser.add_argument('--lr_warmup_percent', type=float, default=0.1)
 parser.add_argument('--custom_lr', type=float, default=1e-3)
 parser.add_argument('--betas', type=tuple, default=(0.9, 0.999))
-parser.add_argument('--bert_weight_decay', type=float, default=0.01)
-parser.add_argument('--grad_clip', type=float, default=5.0)
+parser.add_argument('--weight_decay', type=float, default=0.0)
+parser.add_argument('--grad_clip', type=float)
 parser.add_argument('--eps', type=float, default=1e-8)
 parser.add_argument('--hapi_info', type=str, default='sa/imdb/amazon_sa/22-05-23')
 parser.add_argument('--hapi_data_dir', type=str, default='/home/jkl6486/HAPI')
-parser.add_argument('--dataset_path', type=str, default='/data/jc/data/sentiment/IMDB/')
+parser.add_argument('--dataset_path', type=str, default='/data/jc/data/sentiment/IMDB_hapi/')
 parser.add_argument('--model', type=str, default='xlnet-base-cased')
 parser.add_argument('--dataset', type=str, default='imdb')
 parser.add_argument('--log_dir', action='store_true')
@@ -131,8 +131,12 @@ parser.add_argument('--retokenize', action='store_true')
 parser.add_argument('--split_unlabel_percent', type=float, default=0.0)
 parser.add_argument('--split_label_percent', type=float, default=1.0)
 parser.add_argument('--balance', action='store_true')
+parser.add_argument('--adaptive', action='store_true')
+parser.add_argument('--n_samples', type=int)
+parser.add_argument('--sample_times', type=int)
 
 parser.add_argument('--api', type=str)
+parser.add_argument('--lr_scheduler_freq', type=str,default='epoch')
 
 args = parser.parse_args()
 
@@ -166,7 +170,8 @@ elif 'xlnet' in args.model:
     model = getattr(models,'xlnet')(parallel=parallel,model_name=args.model,num_classes=args.num_classes)
 elif 'vit' in args.model:
     model = getattr(models,'vit')(parallel=parallel,model_name=args.model,num_classes=args.num_classes)
-
+elif 'roberta' in args.model:
+    model = getattr(models,'roberta')(parallel=parallel,model_name=args.model,num_classes=args.num_classes)
 # Initialize train & test datasets
 if args.dataset == 'imdb':  
     train_dataset = IMDB(input_directory=os.path.join(args.dataset_path,"aclImdb/test"),tokenizer=model.tokenizer,hapi_data_dir=args.hapi_data_dir,hapi_info=args.hapi_info,retokenize=args.retokenize,api=args.api,max_length=args.max_length)
@@ -192,10 +197,8 @@ def get_sampler(train_dataset):
     weights = [class_weights[labels[i]] for i in range(int(num_samples))]
     return WeightedRandomSampler(torch.DoubleTensor(weights), int(num_samples))
 
-
-if args.split_unlabel_percent != 0.0:
-
-    
+unlabel_dataset_indices =None
+if args.split_unlabel_percent != 0.0:#mixmatch
     _temp_dataset, _ = split_dataset(
         train_dataset,
         percent=args.split_label_percent+args.split_unlabel_percent)
@@ -223,17 +226,20 @@ if args.split_unlabel_percent != 0.0:
     unlabel_iterator = itertools.cycle(_unlabel_dataloader)
     
     
-elif args.split_label_percent != 1.0:
+elif args.split_label_percent != 1.0:#adaptive or part data
     
-    _label_dataset, _ = split_dataset(
+    _label_dataset, _unlabel_dataset = split_dataset(
         train_dataset,
         percent=args.split_label_percent)
+    unlabel_dataset_indices=_unlabel_dataset.indices
     if args.balance:
         sampler=get_sampler(_label_dataset)
         shuffle = False
     else:
         sampler=None
         shuffle = True
+        
+
     train_loader = DataLoader(dataset=_label_dataset,
                     batch_size=args.batch_size,
                     shuffle=shuffle,sampler=sampler,
@@ -266,22 +272,22 @@ test_loader = DataLoader(dataset=test_dataset,
 
 
     
-
+total_iters = len(train_dataset)/args.batch_size*args.epochs
     
 optimizer, lr_scheduler = model.define_optimizer(
         parameters=args.op_parameters,
         OptimType=args.optimizer,
-        lr=args.lr,custom_lr=args.custom_lr,weight_decay=args.bert_weight_decay,
+        lr=args.lr,custom_lr=args.custom_lr,weight_decay=args.weight_decay,
         lr_scheduler=args.lr_scheduler,
         epochs=args.epochs, 
         lr_warmup_percent=args.lr_warmup_percent, 
         betas=args.betas,
-        eps=args.eps)
+        eps=args.eps,total_iters=total_iters)
 
 
  
 if args.log_dir:
-    log_dir = 'runs/'+args.hapi_info.replace('/','_')+"_ep"+str(args.epochs)+"_num_classes_"+str(args.num_classes)+"_lr"+str(args.lr)+"_bs"+str(args.batch_size)+"_"+args.optimizer+"_"+args.op_parameters+"_"+args.model
+    log_dir = 'runs/'+args.hapi_info.replace('/','_')+"_ep"+str(args.epochs)+"_num_classes_"+str(args.num_classes)+"_lr"+str(args.lr)+"_bs"+str(args.batch_size)+"_"+args.optimizer+"_"+args.op_parameters+"_"+args.model+"_percent_"+str(args.split_label_percent)
     if args.label_train:
         log_dir += "_labeltrain"
     if args.api:
@@ -290,12 +296,15 @@ if args.log_dir:
         log_dir += "_mixmatch"
     if args.balance:
         log_dir += "_balance"
-
+    if args.adaptive:
+        log_dir += "adaptive"
 else:
     log_dir = 'runs/debug'
     
 if args.lr_scheduler:
     log_dir += "_lr_scheduler"
+
+log_dir += "dropout"
 
 try:
     os.mkdir(log_dir)
@@ -320,5 +329,8 @@ distillation(module=model,num_classes=args.num_classes,
              grad_clip=args.grad_clip,
              loader_train=train_loader,loader_valid=test_loader,unlabel_iterator=unlabel_iterator,
              mixmatch=args.mixmatch,
-             save=args.save,label_train=args.label_train,
-             api=args.api,task=task)
+             save=args.save,label_train=args.label_train,lr_scheduler_freq=args.lr_scheduler_freq,
+             api=args.api,task=task,unlabel_dataset_indices=_unlabel_dataset.indices if args.adaptive else None,
+             hapi_data_dir=args.hapi_data_dir,hapi_info=args.hapi_info,
+             batch_size=args.batch_size,num_workers=args.num_workers,
+             n_samples = args.n_samples,adaptive=args.adaptive,get_sampler_fn=get_sampler,balance=args.balance,sample_times=args.sample_times)

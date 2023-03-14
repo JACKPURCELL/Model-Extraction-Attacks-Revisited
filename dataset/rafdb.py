@@ -17,6 +17,14 @@ import re
 import hapi
 # hapi.config.data_dir = "/home/ljc/HAPI" 
 
+# CUDA_VISIBLE_DEVICES=2 python [main.py](http://main.py/) --optimizer SGD --epochs 50 --log_dir --batch_size 256 --model resnet50 --grad_clip 3.0 --lr 0.1 --op_parameters full --validate_interval 5 --num_classes 7 --dataset rafdb --hapi_info fer/rafdb/microsoft_fer/22-05-23 --split_label_percent 0.46
+
+# CUDA_VISIBLE_DEVICES=1 python [main.py](http://main.py/) --balance  --optimizer SGD --epochs 50  --log_dir --batch_size 256 --model resnet50 --grad_clip 3.0 --lr 0.1 --op_parameters full --validate_interval 5 --num_classes 7 --dataset rafdb --hapi_info fer/rafdb/microsoft_fer/22-05-23 --split_label_percent 0.46
+
+# CUDA_VISIBLE_DEVICES=0 python [main.py](http://main.py/) --adaptive --sample_times 5 --optimizer SGD --epochs 50 --n_samples 1024 --log_dir --batch_size 256 --model resnet50 --grad_clip 3.0 --lr 0.1 --op_parameters full --validate_interval 5 --num_classes 7 --dataset rafdb --hapi_info fer/rafdb/microsoft_fer/22-05-23 --split_label_percent 0.05
+
+# CUDA_VISIBLE_DEVICES=3 python [main.py](http://main.py/) --adaptive --balance --sample_times 5 --optimizer SGD --epochs 50 --n_samples 1024 --log_dir --batch_size 256 --model resnet50 --grad_clip 3.0 --lr 0.1 --op_parameters full --validate_interval 5 --num_classes 7 --dataset rafdb --hapi_info fer/rafdb/microsoft_fer/22-05-23 --split_label_percent 0.05
+
 def get_transform_base(mode: str, use_tuple: bool = False,
                            auto_augment: bool = False, crop_shape = 100,norm_par=None) -> transforms.Compose:
     if mode == 'train':

@@ -13,6 +13,7 @@ import torch.nn as nn
 
         
 
+from optimizer.lion import Lion
 
 
 from torch.optim.optimizer import Optimizer
@@ -24,7 +25,7 @@ TOKENIZERS_PARALLELISIM = True
 
 class XLNet(nn.Module):
 
-    def __init__(self, name: str = 'xlnet-base-cased', num_classes=2, parallel = True, model_name = "xlnet-base-cased",**kwargs):
+    def __init__(self,  num_classes=2, parallel = True, model_name = "xlnet-base-cased",**kwargs):
         super(XLNet, self).__init__()
 
         if parallel:
@@ -32,7 +33,8 @@ class XLNet(nn.Module):
         else:
             self.model = XLNetForSequenceClassification.from_pretrained(model_name, num_labels=num_classes).cuda()
 
-        self.tokenizer = XLNetTokenizer.from_pretrained(name)
+
+        self.tokenizer = XLNetTokenizer.from_pretrained(model_name)
 
     def forward(self, input_ids,token_type_ids,attention_mask):
 
@@ -112,7 +114,10 @@ class XLNet(nn.Module):
                 The tuple of optimizer and lr_scheduler.
         """
         if isinstance(OptimType, str):
-            OptimType: type[Optimizer] = getattr(torch.optim, OptimType)
+            if OptimType == 'Lion':
+                OptimType = Lion
+            else:
+                OptimType: type[Optimizer] = getattr(torch.optim, OptimType)
         match parameters:
             case 'classifier' | 'partial':
                 bert_identifiers = ['transformer']

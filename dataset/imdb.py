@@ -86,13 +86,13 @@ class IMDB(Dataset):
         Function to tokenize & encode examples and save the tokenized versions to a separate folder.
         This way, we won't have to perform the same tokenization and encoding ops every epoch.
         """
-        if self.retokenize or not os.path.exists(os.path.join(self.positive_path, 'tokenized_and_encoded')):
+        if self.retokenize or not os.path.exists(os.path.join(self.positive_path, 'tokenized_and_encoded' + self.tokenizer.name_or_path)):
             if self.retokenize:
                 try:
-                    shutil.rmtree(os.path.join(self.positive_path, 'tokenized_and_encoded'))
+                    shutil.rmtree(os.path.join(self.positive_path, 'tokenized_and_encoded' + self.tokenizer.name_or_path))
                 except:
                     print("no path")   
-            os.mkdir(os.path.join(self.positive_path, 'tokenized_and_encoded'))
+            os.mkdir(os.path.join(self.positive_path, 'tokenized_and_encoded' + self.tokenizer.name_or_path))
 
             # Clean & tokenize positive reviews
             for i in trange(len(self.positive_files), desc='Tokenizing & Encoding Positive Reviews',
@@ -106,18 +106,18 @@ class IMDB(Dataset):
                 example = re.sub(' +', ' ', example)
                 example = self.tokenizer(example,return_tensors='pt',padding="max_length",max_length=self.max_length,truncation=True)
 
-                with open(os.path.join(self.positive_path, 'tokenized_and_encoded', file), mode='wb') as f:
+                with open(os.path.join(self.positive_path, 'tokenized_and_encoded' + self.tokenizer.name_or_path, file), mode='wb') as f:
                     pickle.dump(obj=example, file=f)
         else:
             logging.warning('Tokenized positive reviews directory already exists!')
 
-        if self.retokenize or not os.path.exists(os.path.join(self.negative_path, 'tokenized_and_encoded')):
+        if self.retokenize or not os.path.exists(os.path.join(self.negative_path, 'tokenized_and_encoded' + self.tokenizer.name_or_path)):
             if self.retokenize:
                 try:
-                    shutil.rmtree(os.path.join(self.negative_path, 'tokenized_and_encoded'))
+                    shutil.rmtree(os.path.join(self.negative_path, 'tokenized_and_encoded' + self.tokenizer.name_or_path))
                 except:
                     print("no path")   
-            os.mkdir(os.path.join(self.negative_path, 'tokenized_and_encoded'))
+            os.mkdir(os.path.join(self.negative_path, 'tokenized_and_encoded' + self.tokenizer.name_or_path))
 
             # Clean & tokenize negative reviews
             for i in trange(len(self.negative_files), desc='Tokenizing & Encoding Negative Reviews',
@@ -132,7 +132,7 @@ class IMDB(Dataset):
                 example = self.tokenizer(example,return_tensors='pt',padding="max_length",max_length=self.max_length,truncation=True)
 
 
-                with open(os.path.join(self.negative_path, 'tokenized_and_encoded', file), mode='wb') as f:
+                with open(os.path.join(self.negative_path, 'tokenized_and_encoded' + self.tokenizer.name_or_path, file), mode='wb') as f:
                     pickle.dump(obj=example, file=f)
         else:
             logging.warning('Tokenized negative reviews directory already exists!')
@@ -144,7 +144,7 @@ class IMDB(Dataset):
         if index < self.num_positive_examples:
             file = self.positive_files[index]
             label = torch.tensor(data=self.positive_label, dtype=torch.long)
-            with open(os.path.join(self.positive_path, 'tokenized_and_encoded', file), mode='rb') as f:
+            with open(os.path.join(self.positive_path, 'tokenized_and_encoded' + self.tokenizer.name_or_path, file), mode='rb') as f:
                 example = pickle.load(file=f)
             match self.api:
                 case 'amazon':
@@ -153,10 +153,12 @@ class IMDB(Dataset):
                 case 'microsoft':
                     with open(os.path.join(self.positive_path, 'mic_api_2022-11-01', file), mode='rb') as p:
                         api_result = json.load(p)
+                case _:
+                    pass
         elif index >= self.num_positive_examples:
             file = self.negative_files[index-self.num_positive_examples]
             label = torch.tensor(data=self.negative_label, dtype=torch.long)
-            with open(os.path.join(self.negative_path, 'tokenized_and_encoded', file), mode='rb') as f:
+            with open(os.path.join(self.negative_path, 'tokenized_and_encoded' + self.tokenizer.name_or_path, file), mode='rb') as f:
                 example = pickle.load(file=f)
             match self.api:
                 case 'amazon':
@@ -165,6 +167,8 @@ class IMDB(Dataset):
                 case 'microsoft':
                     with open(os.path.join(self.negative_path, 'mic_api_2022-11-01', file), mode='rb') as p:
                         api_result = json.load(p)
+                case _:
+                    pass
         else:
             raise ValueError('Out of range index while accessing dataset')
 
@@ -187,6 +191,22 @@ class IMDB(Dataset):
                     hapi_label = torch.tensor(0)
                 else:
                     hapi_label = torch.tensor(1)
+            case 'amazon_hapi':
+                file_spilt = re.split('_|.txt',file)
+                hapi_id = int(file_spilt[0])*100 + int(file_spilt[1])
+                hapi_label = self.info_lb[hapi_id]
+                if hapi_label == -1:
+                    raise ValueError('Out of range index while accessing dataset')
+                hapi_confidence = self.info_conf[hapi_id]
+                if hapi_confidence >= 0.3333333333333333:
+                    other_confidence = (1 - hapi_confidence)*0.5
+                    soft_label = torch.ones(3)*other_confidence
+                    soft_label[int(hapi_label)] = hapi_confidence
+                else:
+                    other_confidence = 1 - hapi_confidence
+                    soft_label = torch.zeros(3)
+                    soft_label[int(hapi_label)] = hapi_confidence
+                    soft_label[2] = other_confidence
             case _:
                 file_spilt = re.split('_|.txt',file)
                 hapi_id = int(file_spilt[0])*100 + int(file_spilt[1])
@@ -198,5 +218,6 @@ class IMDB(Dataset):
                 soft_label = torch.zeros(3)
                 soft_label[int(hapi_label)] = hapi_confidence
                 soft_label[2] = other_confidence
-
+        if 'roberta' in self.tokenizer.name_or_path:
+            return example.input_ids[0], example.attention_mask[0], label, soft_label, hapi_label
         return example.input_ids[0], example.token_type_ids[0], example.attention_mask[0], label, soft_label, hapi_label

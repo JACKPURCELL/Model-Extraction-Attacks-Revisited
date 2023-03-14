@@ -4,6 +4,7 @@ weights.
 """
 
 import logging
+import os
 from typing import Callable, Iterable, Iterator
 import tensorboard
 import torch.nn as nn
@@ -17,7 +18,36 @@ from .output import ansi, get_ansi_len, output_iter, prints
 from torch.utils.tensorboard import SummaryWriter
 
 
+"""
+Script for training, testing, and saving finetuned, binary classification models based on pretrained
+BERT parameters, for the IMDB dataset.
+"""
+
+import itertools
+from torch.utils.data import DataLoader
+
+# !pip install pytorch_transformers
+
+from dataset.imdb import IMDB
+from dataset.rafdb import RAFDB
+from torch.utils.data import Dataset,Subset
+
+from torch.utils.tensorboard import SummaryWriter
+
+
+def entropy(y_pred_prob,indices,n_samples):
+    
+    origin_index = torch.tensor(indices).cuda()
+    entropy= -torch.nansum(torch.multiply(y_pred_prob, torch.log(y_pred_prob)), axis=1)
+    pred_label = torch.argmax(y_pred_prob, axis=1)
+    eni = torch.column_stack((origin_index[:len(entropy)],
+                           entropy,
+                           pred_label))
+
+    eni = eni[(-eni[:, 1]).argsort()]
+    return eni[:, 0].type(torch.IntTensor)[:n_samples]
 def mixmatch_get_data(data,forward_fn,unlabel_iterator):
+    # https://github.com/YU1ut/MixMatch-pytorch/blob/master/train.py
     r"""Process data. Defaults to be :attr:`self.dataset.get_data`.
     If :attr:`self.dataset` is ``None``, return :attr:`data` directly.
 
@@ -273,7 +303,7 @@ def linear_rampup(iter, rampup_length):
         return float(current)
 
 def SemiLoss(outputs_x, targets_x, outputs_u, targets_u, iter):
-    # Lx, Lu, w = criterion(logits_x, mixed_target[:batch_size], logits_u, mixed_target[batch_size:], epoch+batch_idx/args.train_iteration)
+    # Lx, Lu, w = criterion(logits_x, mixed_target[:batch_size], logits_u, mixed_target[batch_size:], epoch+batch_idx/train_iteration)
     # lx is cross entropy, lu is L2 normalization
     
     probs_u = torch.softmax(outputs_u, dim=1)
@@ -322,7 +352,16 @@ def loss_fn(_input: torch.Tensor = None, _label: torch.Tensor = None,
     return criterion(_output,_soft_label)
 
 
+# def entropy(y_pred_prob, n_samples):
+#     origin_index = np.arange(0, len(y_pred_prob))
+#     entropy = -np.nansum(np.multiply(y_pred_prob, np.log(y_pred_prob)), axis=1)
+#     pred_label = np.argmax(y_pred_prob, axis=1)
+#     eni = np.column_stack((origin_index,
+#                            entropy,
+#                            pred_label))
 
+#     eni = eni[(-eni[:, 1]).argsort()]
+#     return eni[:n_samples], eni[:, 0].astype(int)[:n_samples]
 
 def distillation(module: nn.Module, num_classes: int,
           epochs: int, optimizer, lr_scheduler,
@@ -340,7 +379,15 @@ def distillation(module: nn.Module, num_classes: int,
           verbose: bool = True, output_freq: str = 'iter', indent: int = 0,
           change_train_eval: bool = True, lr_scheduler_freq: str = 'epoch',
           backward_and_step: bool = True, 
-          mixmatch: bool = False,label_train: bool=False,api=False,task='sentiment',
+          mixmatch: bool = False,label_train: bool=False,
+          api=False,task='sentiment',unlabel_dataset_indices=None,
+          hapi_data_dir=None,hapi_info=None,
+        batch_size=None,num_workers=None,
+        n_samples = None,adaptive=False,get_sampler_fn=None,
+        balance=False,sample_times = 10,
+          
+          
+          
           **kwargs):
     r"""Train the model"""
     if epochs <= 0:
@@ -388,6 +435,8 @@ def distillation(module: nn.Module, num_classes: int,
                                     header=print_prefix,
                                     tqdm_header='Epoch',
                                     indent=indent)
+    new_label_indices = None
+    
     for _epoch in iterator:
         _epoch += 1
         logger.reset()
@@ -461,15 +510,18 @@ def distillation(module: nn.Module, num_classes: int,
                             loss = loss_fn( _soft_label=_soft_label, _output=_output)
 
                 case 'sentiment':
-                    input_ids, token_type_ids, attention_mask, _label, _soft_label, hapi_label  = data
+                    # input_ids, token_type_ids, attention_mask, _label, _soft_label, hapi_label  = data
+                    input_ids, attention_mask, _label, _soft_label, hapi_label  = data
                     input_ids = input_ids.cuda()
-                    token_type_ids = token_type_ids.cuda()
+                    # token_type_ids = token_type_ids.cuda()
                     attention_mask = attention_mask.cuda()
                     _label = _label.cuda()
                     _soft_label = _soft_label.cuda()
                     hapi_label = hapi_label.cuda()
 
-                    _output = forward_fn(input_ids=input_ids,token_type_ids=token_type_ids,attention_mask=attention_mask)
+                    # _output = forward_fn(input_ids=input_ids,token_type_ids=token_type_ids,attention_mask=attention_mask)
+                    _output = forward_fn(input_ids=input_ids,attention_mask=attention_mask)
+                    
                     if label_train:
                         loss = loss_fn( _label=hapi_label, _output=_output)
                     else:
@@ -477,7 +529,6 @@ def distillation(module: nn.Module, num_classes: int,
                     
             if backward_and_step:
                 optimizer.zero_grad()
-                #backward the weights 
                 loss.backward()
                 if grad_clip is not None:
                     nn.utils.clip_grad_norm_(params, grad_clip)
@@ -506,6 +557,73 @@ def distillation(module: nn.Module, num_classes: int,
                 logger.update(n=batch_size, gt_acc1=gt_acc1,  
                             hapi_loss=float(loss), hapi_acc1=hapi_acc1)
         optimizer.zero_grad()
+        
+        if adaptive and _epoch%2==0 and sample_times !=0:
+            # -------
+            sample_times -=1
+            unlabel_dataset = Subset(RAFDB(input_directory=os.path.join('/data/jc/data/image/RAFDB',"train"),
+                                        hapi_data_dir=hapi_data_dir,hapi_info=hapi_info,api=api),
+                                    unlabel_dataset_indices)
+
+            unlabel_dataloader = DataLoader(dataset=unlabel_dataset,
+                            batch_size=batch_size,
+                            num_workers=num_workers,drop_last=True)
+            unlabel_iterator = itertools.cycle(unlabel_dataloader)
+            
+            for i in range(int(len(unlabel_dataset_indices)/batch_size)):
+                inputs_u, _, _, _ = next(unlabel_iterator)
+                inputs_u=inputs_u.cuda()
+                with torch.no_grad():
+                    outputs_u = forward_fn(inputs_u)
+                    if i == 0:
+                        outputs_u_total = outputs_u
+                    else:
+                        outputs_u_total = torch.cat((outputs_u_total,outputs_u),0)
+            # get the data indices which is need to label 
+            if _epoch == 2:
+                new_label_indices = entropy(outputs_u_total,unlabel_dataset_indices,n_samples)
+            else:
+                new_label_indices = torch.cat((new_label_indices,entropy(outputs_u_total,unlabel_dataset_indices,n_samples)),0)
+            unlabel_dataset_indices = np.setdiff1d(unlabel_dataset_indices,new_label_indices.numpy())
+                
+            new_label_dataset = Subset(RAFDB(input_directory=os.path.join('/data/jc/data/image/RAFDB',"train"),hapi_data_dir=hapi_data_dir,hapi_info=hapi_info,api=api),
+                                        new_label_indices)
+            # unlabel_dataset = Subset(RAFDB(input_directory=os.path.join('/data/jc/data/image/RAFDB',"train"),hapi_data_dir=hapi_data_dir,hapi_info=hapi_info,api=api),
+            #                             unlabel_dataset_indices)
+        if new_label_indices is not None:
+            print("new_label_indices: ",len(new_label_indices),"unlabel_dataset_indices: ",len(unlabel_dataset_indices))
+            
+            if balance:
+                sampler=get_sampler_fn(new_label_dataset)
+                shuffle = False
+            else:
+                sampler=None
+                shuffle = True
+            new_label_dataloader = DataLoader(dataset=new_label_dataset,
+                            batch_size=batch_size,
+                            shuffle=shuffle,sampler=sampler,
+                            num_workers=num_workers,drop_last=True)
+            new_label_iterator = itertools.cycle(new_label_dataloader)
+            
+            for i in range(int(len(new_label_indices)/batch_size)):
+                _input, _label, _soft_label, hapi_label  = next(new_label_iterator)
+                _input = _input.cuda()
+                _soft_label = _soft_label.cuda()
+                _label = _label.cuda()
+                hapi_label = hapi_label.cuda()
+                _output = forward_fn(_input)
+                if label_train:
+                    loss = loss_fn( _label=hapi_label, _output=_output)
+                else:
+                    loss = loss_fn( _soft_label=_soft_label, _output=_output)
+                if backward_and_step:
+                    optimizer.zero_grad() 
+                    loss.backward()
+                    if grad_clip is not None:
+                        nn.utils.clip_grad_norm_(params, grad_clip)
+                    optimizer.step()
+            # -------
+        
         if lr_scheduler and lr_scheduler_freq == 'epoch':
             lr_scheduler.step()
         if change_train_eval:
@@ -580,9 +698,11 @@ def dis_validate(module: nn.Module, num_classes: int,
         logger.create_meters(gt_loss=None, gt_acc1=None, 
                              hapi_loss=None, hapi_acc1=None)
     else:
+        # logger.create_meters( gt_loss=None, gt_acc1=None, 
+        #                     hapi_loss=None, hapi_acc1=None,
+        #                     tt=None,tf=None,ft=None,ff=None)
         logger.create_meters( gt_loss=None, gt_acc1=None, 
-                            hapi_loss=None, hapi_acc1=None,
-                            tt=None,tf=None,ft=None,ff=None)
+                            hapi_loss=None, hapi_acc1=None)
     loader_epoch = loader  
     if verbose:
         header: str = '{yellow}{0}{reset}'.format(print_prefix, **ansi)
@@ -604,15 +724,16 @@ def dis_validate(module: nn.Module, num_classes: int,
 
 
                 case 'sentiment':
-                    input_ids, token_type_ids, attention_mask, _label, _soft_label, hapi_label  = data
+                    # input_ids, token_type_ids, attention_mask, _label, _soft_label, hapi_label  = data
+                    input_ids, attention_mask, _label, _soft_label, hapi_label  = data
                     input_ids = input_ids.cuda()
-                    token_type_ids = token_type_ids.cuda()
+                    # token_type_ids = token_type_ids.cuda()
                     attention_mask = attention_mask.cuda()
                     _label = _label.cuda()
                     _soft_label = _soft_label.cuda()
                     hapi_label = hapi_label.cuda()
 
-                    _output = forward_fn(input_ids=input_ids,token_type_ids=token_type_ids,attention_mask=attention_mask)
+                    _output = forward_fn(input_ids=input_ids,attention_mask=attention_mask)
         
             gt_loss = float(loss_fn( _label=_label, _output=_output, **kwargs))
             if label_train:
@@ -643,7 +764,9 @@ def dis_validate(module: nn.Module, num_classes: int,
                 gt_acc1, gt_acc5 = accuracy_fn(
                     _output, _label, num_classes=new_num_classes, topk=(1, 5))
                 logger.update(n=batch_size, gt_loss=float(gt_loss), gt_acc1=gt_acc1, 
-                          hapi_loss=float(hapi_loss), hapi_acc1=hapi_acc1,tt=tt,tf=tf,ft=ft,ff=ff)
+                          hapi_loss=float(hapi_loss), hapi_acc1=hapi_acc1)
+                # logger.update(n=batch_size, gt_loss=float(gt_loss), gt_acc1=gt_acc1, 
+                #           hapi_loss=float(hapi_loss), hapi_acc1=hapi_acc1,tt=tt,tf=tf,ft=ft,ff=ff)
     if api is not None:
         gt_loss, gt_acc1, hapi_loss, hapi_acc1 = (logger.meters['gt_loss'].global_avg,
                     logger.meters['gt_acc1'].global_avg,
