@@ -49,7 +49,6 @@ parser.add_argument('--seed', type=int, default=42)
 parser.add_argument('--op_parameters', type=str, default='full')
 parser.add_argument('--lr_scheduler', action='store_true')
 parser.add_argument('--validate_interval', type=int, default=1)
-#TODO: fix save
 parser.add_argument('--save', action='store_true')
 parser.add_argument('--label_train', action='store_true')
 parser.add_argument('--retokenize', action='store_true')

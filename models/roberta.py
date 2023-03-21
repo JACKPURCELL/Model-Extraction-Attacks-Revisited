@@ -177,13 +177,13 @@ class ROBERTA(nn.Module):
                         optimizer, step_size=lr_step_size, gamma=lr_gamma)
                 # case 'CosineAnnealingLR':
                 #     main_lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-                #         optimizer, T_max=epochs - lr_warmup_epochs, eta_min=lr_min,verbose=True)
+                #         optimizer, T_max=epochs - lr_warmup_epochs, eta_min=lr_min)
                 case 'ExponentialLR':
                     main_lr_scheduler = torch.optim.lr_scheduler.ExponentialLR(
                         optimizer, gamma=lr_gamma)
                 case 'LinearLR':
                     main_lr_scheduler = torch.optim.lr_scheduler.LinearLR(
-                        optimizer, start_factor=1.0, end_factor=0, total_iters=decay_iters, last_epoch=-1, verbose=True)
+                        optimizer, start_factor=1.0, end_factor=0, total_iters=decay_iters, last_epoch=-1)
                 case _:
                     raise NotImplementedError(
                         f'Invalid {lr_scheduler_type=}.'
@@ -194,7 +194,7 @@ class ROBERTA(nn.Module):
                     case 'linear':
                         warmup_lr_scheduler = torch.optim.lr_scheduler.LinearLR(
                             optimizer, start_factor=lr_warmup_decay,
-                            total_iters=lr_warmup_iters,verbose=True)
+                            total_iters=lr_warmup_iters)
                         #lr_warmup_epochs
                     case 'constant':
                         warmup_lr_scheduler = torch.optim.lr_scheduler.ConstantLR(

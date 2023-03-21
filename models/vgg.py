@@ -16,39 +16,18 @@ from collections.abc import Iterable
 from adversirial.pgd import PGD
 from optimizer.lion import Lion
 
-        # group.add_argument('--adv_train', choices=[None, 'pgd', 'free', 'trades'],
-        #                    help='adversarial training (default: None)')
-        # group.add_argument('--adv_train_random_init', action='store_true')
-        # group.add_argument('--adv_train_iter', type=int,
-        #                    help='adversarial training PGD iteration (default: 7).')
-        # group.add_argument('--adv_train_alpha', type=float,
-        #                    help='adversarial training PGD alpha (default: 2/255).')
-        # group.add_argument('--adv_train_eps', type=float,
-        #                    help='adversarial training PGD eps (default: 8/255).')
-        # group.add_argument('--adv_train_eval_iter', type=int)
-        # group.add_argument('--adv_train_eval_alpha', type=float)
-        # group.add_argument('--adv_train_eval_eps', type=float)
-        # group.add_argument('--adv_train_trades_beta', type=float,
-        #                    help='regularization, i.e., 1/lambda in TRADES '
-        #                    '(default: 6.0)')
+class VGG(nn.Module):
 
-        # group.add_argument('--norm_layer', choices=['bn', 'gn'], default='bn')
-        # group.add_argument('--sgm', action='store_true',
-        #                    help='whether to use sgm gradient (default: False)')
-        # group.add_argument('--sgm_gamma', type=float,
-        #                    help='sgm gamma (default: 1.0)')
-class ResNet(nn.Module):
+    def __init__(self, model_name: str = 'vgg19_bn',num_classes=7,parallel=True):
 
-    def __init__(self, model_name: str = 'resnet50',num_classes=7,parallel=True):
-
-        super(ResNet, self).__init__() 
+        super(VGG, self).__init__() 
         ModelClass = getattr(torchvision.models, model_name)
         if parallel:
             self.model = nn.DataParallel(ModelClass(weights='DEFAULT')).cuda()
         else:
             self.model = ModelClass(weights='DEFAULT').cuda()
             
-        self.model.fc = nn.Linear(in_features=2048, out_features=num_classes,bias=True).cuda()
+        self.model.classifier[6] = nn.Linear(in_features=4096, out_features=num_classes,bias=True).cuda()
 
 
 
@@ -130,7 +109,17 @@ class ResNet(nn.Module):
             else:
                 OptimType: type[Optimizer] = getattr(torch.optim, OptimType)
         match parameters:
-
+            case 'classifier' | 'partial':
+                bert_identifiers = ['features']
+                no_weight_decay_identifiers = ['bias', 'LayerNorm.weight']
+                grouped_model_parameters = [
+                        {'params': [param for name, param in self.model.classifier.named_parameters()],
+                        'lr': custom_lr,
+                        'betas': betas,
+                        'weight_decay': 0.0,
+                        'eps': eps}
+                ]
+                optimizer = OptimType(grouped_model_parameters)
             case 'full':
                 kwargs['momentum'] = momentum
                 kwargs['weight_decay'] = weight_decay

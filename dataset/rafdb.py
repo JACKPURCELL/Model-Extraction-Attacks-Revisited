@@ -69,7 +69,7 @@ class RAFDB(datasets.ImageFolder):
         if transform == 'Normal':
             transform = get_transform_base(
                 mode, use_tuple=True,
-                auto_augment=False, crop_shape = 100,
+                auto_augment=True, crop_shape = 224,
                 norm_par={'mean': [0.485, 0.456, 0.406],'std': [0.229, 0.224, 0.225]})
         elif transform == 'mixmatch':
             transform = get_transform_base(
@@ -126,12 +126,31 @@ class RAFDB(datasets.ImageFolder):
             case 'amazon':
                 with open(os.path.join('/data/jc/data/image/RAFDB', 'amazon_api', path.split('/')[-1]), mode='r') as p:
                     api_result = json.load(p)
+            case 'facepp':
+                with open(os.path.join('/data/jc/data/image/RAFDB', 'facepp_api', path.split('/')[-1]), mode='r') as p:
+                    api_result = json.load(p)
 
         if self.transform is not None:
             sample = self.transform(sample)
         if self.target_transform is not None:
             target = self.target_transform(target)
         match self.api:
+            case 'facepp':
+                soft_label = torch.ones(7)
+                if len(api_result[0]) != 1:
+                    soft_label[0] = api_result[0]['anger']*0.01
+                    soft_label[1] = api_result[0]['disgust']*0.01
+                    soft_label[2] = api_result[0]['fear']*0.01
+                    soft_label[3] = api_result[0]['happiness']*0.01
+                    soft_label[4] = api_result[0]['sadness']*0.01
+                    soft_label[5] = api_result[0]['surprise']*0.01
+                    soft_label[6] = api_result[0]['neutral']*0.01 
+                    # soft_label[7] = api_result[0]['CONFUSED']
+
+                    hapi_label = torch.argmax(soft_label)
+                else:
+                    soft_label = torch.ones(7)*0.14285714285714285
+                    hapi_label = torch.tensor(6)
             case 'amazon':
                 soft_label = torch.ones(7)
                 if len(api_result[0]) != 1:
@@ -147,8 +166,7 @@ class RAFDB(datasets.ImageFolder):
                     hapi_label = torch.argmax(soft_label)
                 else:
                     soft_label = torch.ones(7)*0.14285714285714285
-                    hapi_label = torch.tensor(6)
-                    
+                    hapi_label = torch.tensor(6)        
   
             # case 'microsoft':
             #     soft_label = torch.ones(3)

@@ -119,32 +119,43 @@ class ViT(nn.Module):
             else:
                 OptimType: type[Optimizer] = getattr(torch.optim, OptimType)
         match parameters:
-            # case 'classifier' | 'partial':
-            #     bert_identifiers = ['transformer']
-            #     no_weight_decay_identifiers = ['bias', 'layer_norm.weight']
-            #     grouped_model_parameters = [
-            #             {'params': [param for name, param in self.model.named_parameters()
-            #                         if any(identifier in name for identifier in bert_identifiers) and
-            #                         not any(identifier_ in name for identifier_ in no_weight_decay_identifiers)],
-            #             'lr': lr,
-            #             'betas': betas,
-            #             'weight_decay': weight_decay,
-            #             'eps': eps},
-            #             {'params': [param for name, param in self.model.named_parameters()
-            #                         if any(identifier in name for identifier in bert_identifiers) and
-            #                         any(identifier_ in name for identifier_ in no_weight_decay_identifiers)],
-            #             'lr': lr,
-            #             'betas': betas,
-            #             'weight_decay': 0.0,
-            #             'eps': eps},
-            #             {'params': [param for name, param in self.model.named_parameters()
-            #                         if not any(identifier in name for identifier in bert_identifiers)],
-            #             'lr': custom_lr,
-            #             'betas': betas,
-            #             'weight_decay': 0.0,
-            #             'eps': eps}
-            #     ]
-            #     optimizer = OptimType(grouped_model_parameters)
+            case 'classifier' :
+                bert_identifiers = ['encoder']
+                no_weight_decay_identifiers = ['bias','LayerNorm']
+                grouped_model_parameters = [
+                        {'params': [param for name, param in self.model.heads.named_parameters()],
+                        'lr': custom_lr,
+                        'betas': betas,
+                        'weight_decay': 0.0,
+                        'eps': eps}
+                ]
+                optimizer = OptimType(grouped_model_parameters)
+            case 'partial':
+                bert_identifiers = ['encoder']
+                no_weight_decay_identifiers = ['bias']
+                grouped_model_parameters = [
+                        {'params': [param for name, param in self.model.named_parameters()
+                                    if any(identifier in name for identifier in bert_identifiers) and
+                                    not any(identifier_ in name for identifier_ in no_weight_decay_identifiers)],
+                        'lr': lr,
+                        'betas': betas,
+                        'weight_decay': weight_decay,
+                        'eps': eps},
+                        {'params': [param for name, param in self.model.named_parameters()
+                                    if any(identifier in name for identifier in bert_identifiers) and
+                                    any(identifier_ in name for identifier_ in no_weight_decay_identifiers)],
+                        'lr': lr,
+                        'betas': betas,
+                        'weight_decay': 0.0,
+                        'eps': eps},
+                        {'params': [param for name, param in self.model.named_parameters()
+                                    if not any(identifier in name for identifier in bert_identifiers)],
+                        'lr': custom_lr,
+                        'betas': betas,
+                        'weight_decay': 0.0,
+                        'eps': eps}
+                ]
+                optimizer = OptimType(grouped_model_parameters)
             case 'full':
                 kwargs['momentum'] = momentum
                 kwargs['weight_decay'] = weight_decay

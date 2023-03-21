@@ -3,20 +3,30 @@ Script containing various utilities related to model training, testing, and extr
 weights.
 """
 
+import base64
+from collections import OrderedDict
+import io
+import json
 import logging
 import os
 from typing import Callable, Iterable, Iterator
+import requests
 import tensorboard
 import torch.nn as nn
 import torch
 
 import torch.nn.functional as F
 import numpy as np
+
+from optimizer.optim import Optimizer
+from utils.tensor import add_noise
 from .logger import MetricLogger
 
 from .output import ansi, get_ansi_len, output_iter, prints
 from torch.utils.tensorboard import SummaryWriter
 
+import torchvision.transforms as T
+from PIL import Image
 
 """
 Script for training, testing, and saving finetuned, binary classification models based on pretrained
@@ -104,9 +114,7 @@ def mixmatch_get_data(data,forward_fn,unlabel_iterator):
 
     
 @torch.no_grad()
-def save_fn( file_path: str = None, folder_path: str = None,
-            suffix: str = None, component: str = '',
-            verbose: bool = False, indent: int = 0, **kwargs):
+def save_fn( log_dir,module, verbose: bool = False, indent: int = 0):
     r"""Save pretrained model weights.
 
     Args:
@@ -125,30 +133,14 @@ def save_fn( file_path: str = None, folder_path: str = None,
         indent (int): The indent of output auxialiary information.
         **kwargs: Keyword arguments passed to :any:`torch.save`.
     """
-    if file_path is None:
-        folder_path = folder_path if folder_path is not None \
-            else self.folder_path
-        suffix = suffix if suffix is not None else self.suffix
-        file_path = os.path.normpath(os.path.join(
-            folder_path, f'{self.name}{suffix}.pth'))
-    else:
-        folder_path = os.path.dirname(file_path)
-    if not os.path.exists(folder_path):
-        os.makedirs(folder_path)
-    # TODO: type annotation might change? dict[str, torch.Tensor]
-    module = self._model
-    if component == 'features':
-        module = self._model.features
-    elif component == 'classifier':
-        module = self._model.classifier
-    else:
-        assert component == '', f'{component=}'
-    _dict: OrderedDict[str, torch.Tensor] = module.state_dict(
-        prefix=component)
-    torch.save(_dict, file_path, **kwargs)
+
+    file_path = os.path.normpath(os.path.join(log_dir, f'model.pth'))
+
+    _dict: OrderedDict[str, torch.Tensor] = module.state_dict()
+    torch.save(_dict, file_path)
     if verbose:
         prints(
-            f'Model {self.name} saved at: {file_path}', indent=indent)
+            f'Model saved at: {file_path}', indent=indent)
         
  
 def interleave_offsets(batch, nu):
@@ -349,7 +341,9 @@ def loss_fn(_input: torch.Tensor = None, _label: torch.Tensor = None,
         
     criterion = nn.CrossEntropyLoss(reduction=reduction)
 
+    # return criterion(_output,_soft_label)+torch.mean((_output - _soft_label)**2)*100
     return criterion(_output,_soft_label)
+    
 
 
 # def entropy(y_pred_prob, n_samples):
@@ -363,8 +357,76 @@ def loss_fn(_input: torch.Tensor = None, _label: torch.Tensor = None,
 #     eni = eni[(-eni[:, 1]).argsort()]
 #     return eni[:n_samples], eni[:, 0].astype(int)[:n_samples]
 
-def distillation(module: nn.Module, num_classes: int,
-          epochs: int, optimizer, lr_scheduler,
+from adversirial.pgd import PGD
+
+
+
+        
+adv_x_num = 0
+def get_api(x,api='facepp'):
+
+    # define a transform to convert a tensor to PIL image
+    transform = T.ToPILImage()
+
+    # convert the tensor to PIL image using above transform
+    soft_label_batch = torch.zeros((x.shape[0], 7))
+    hapi_label_batch = torch.zeros((x.shape[0]))
+    for i in range(x.shape[0]):
+        img:Image = transform(x[i,:,:,:])
+        path = os.path.join('/data/jc/data/image/adv_x', str(adv_x_num)+'.jpg')
+        adv_x_num += 1             
+        img.save(path)
+        match api:
+            case 'facepp':
+                with io.open(path, 'rb') as image:
+                    data = {'api_key':'0KHi8-QNz1qcDUSAzpcbCSQBfBL8GZPJ',
+                    'api_secret':'0A_i8hjaXU4UqLbmpXKpj9qmEwzUqBn0',
+                    'image_base64':base64.b64encode(image.read()),
+                    'return_attributes':'emotion'}
+                    r = requests.post(url = 'https://api-cn.faceplusplus.com/facepp/v3/detect', data = data)
+                    responses = r.text
+                    responses = json.loads(responses)
+                    soft_label = torch.ones(7)
+                    
+                    if len(responses['faces']) != 0:
+                        soft_label[0] = responses['faces'][0]['attributes']['emotion']['anger']
+                        soft_label[1] = responses['faces'][0]['attributes']['emotion']['disgust']
+                        soft_label[2] = responses['faces'][0]['attributes']['emotion']['fear']
+                        soft_label[3] = responses['faces'][0]['attributes']['emotion']['happiness']
+                        soft_label[4] = responses['faces'][0]['attributes']['emotion']['sadness']
+                        soft_label[5] = responses['faces'][0]['attributes']['emotion']['surprise']
+                        soft_label[6] = responses['faces'][0]['attributes']['emotion']['neutral']
+                        hapi_label = torch.argmax(soft_label)
+
+                    else:
+                        soft_label = torch.ones(7)*0.14285714285714285
+                        hapi_label = torch.tensor(6)
+                    soft_label_batch[i,:] = soft_label
+                    hapi_label_batch[i] = hapi_label
+            case _:
+                raise NotImplementedError
+    return soft_label_batch,hapi_label_batch                          
+
+# def adv_loss(pgd:PGD,api,_input: torch.Tensor,  _soft_label: torch.Tensor,forward_fn,
+#                 adv_train: str = None,**kwargs) -> torch.Tensor:
+#     adv_train = adv_train
+#     # loss_fn = loss_fn if callable(loss_fn) else self.loss
+
+#     adv_x, _ = pgd.optimize(_input=_input, target=_soft_label,
+#                                     iteration=7,
+#                                     pgd_alpha=2/255,
+#                                     pgd_eps=8/255,
+#                                     random_init=False)
+#     adv_x = _input + (adv_x - _input).detach()
+#     _adv_soft_label,_adv_hapi_label = _soft_label,torch.argmax(_soft_label,dim=1)
+
+#     # _adv_soft_label,_adv_hapi_label = get_api(adv_x,api)
+    
+#     return adv_x,_adv_soft_label,_adv_hapi_label,loss_fn(_output=forward_fn(adv_x), _soft_label=_adv_soft_label)
+
+               
+def distillation(module: nn.Module, pgd_set,num_classes: int,
+          epochs: int, optimizer, lr_scheduler,adv_train=None,adv_train_iter=7,adv_valid=False,
         log_dir:str = 'runs/test', 
           grad_clip: float = 5.0, 
           print_prefix: str = 'Distill', start_epoch: int = 0, resume: int = 0,
@@ -394,7 +456,63 @@ def distillation(module: nn.Module, num_classes: int,
         return
    
     forward_fn =  module.__call__
+    if adv_train is not None or adv_valid:
+        pgd = PGD(forward_fn,pgd_set,pgd_alpha=2/255, pgd_eps=8/255,
+                iteration=adv_train_iter, stop_threshold=None,
+                target_idx=0,
+            random_init=False,
+                clip_min=0.0, clip_max=1.0)
+        
+        def after_loss_fn(_input: torch.Tensor,  _soft_label: torch.Tensor, optimizer: Optimizer=None,  mode='train',**kwargs):
+            optimizer.zero_grad()
+            module.zero_grad()
+            # if pre_conditioner is not None:
+            #     pre_conditioner.reset()
 
+            if adv_train == 'free' and mode == 'train':
+                #TODO:need to verify _soft_label
+                noise = pgd.init_noise(_input.shape, pgd_eps=8/255,
+                                            random_init=False,
+                                            device=_input.device)
+                adv_x = add_noise(x=_input, noise=noise, universal=pgd.universal,
+                                    clip_min=pgd.clip_min, clip_max=pgd.clip_max)
+                noise.data = pgd.valid_noise(adv_x, _input)
+                for m in range(adv_train_iter):
+                    loss = loss_fn(_output=forward_fn(adv_x), _soft_label=_soft_label)
+
+                    loss.backward()
+                    optimizer.step()
+                    optimizer.zero_grad()
+                    module.zero_grad()
+                    # self.eval()
+                    #找到分类边缘的advx
+                    adv_x, _ = pgd.optimize(_input=_input, noise=noise, target=_soft_label, iteration=1,
+                                                    pgd_alpha=2/255, pgd_eps=8/255)
+                    #拟合分类边缘的advx
+                    if m == adv_train_iter - 1:    
+                        _adv_soft_label,_adv_hapi_label = _soft_label,torch.argmax(_soft_label,dim=1)
+                        # _adv_soft_label,_adv_hapi_label = get_api(adv_x,api)
+                        loss = loss_fn(_output=forward_fn(adv_x), _soft_label=_adv_soft_label)  
+                        return _adv_soft_label,_adv_hapi_label
+            elif adv_train == 'pgd' or mode == 'valid':
+                adv_x, _ = pgd.optimize(_input=_input, target=_soft_label,
+                                    iteration=7,
+                                    pgd_alpha=2/255,
+                                    pgd_eps=8/255,
+                                    random_init=False)
+                adv_x = _input + (adv_x - _input).detach()
+                _adv_soft_label,_adv_hapi_label = _soft_label,torch.argmax(_soft_label,dim=1)
+                loss = loss_fn(_output=forward_fn(adv_x), _soft_label=_adv_soft_label)
+      
+            else:
+                raise NotImplementedError(f'{adv_train=} is not supported yet.')
+            
+            if mode == 'train':
+                loss.backward()    
+                return _adv_soft_label,_adv_hapi_label
+            else:
+                return adv_x, _adv_soft_label, _adv_hapi_label
+  
 
 
     writer = SummaryWriter(log_dir=log_dir)
@@ -530,11 +648,14 @@ def distillation(module: nn.Module, num_classes: int,
             if backward_and_step:
                 optimizer.zero_grad()
                 loss.backward()
+                if adv_train:
+                    _adv_soft_label, _adv_hapi_label = after_loss_fn(_input=_input,_soft_label=_soft_label,optimizer=optimizer)
+                        
                 if grad_clip is not None:
                     nn.utils.clip_grad_norm_(params, grad_clip)
                 optimizer.step()
 
-          
+                #TODO 计算区别评估
 
             if lr_scheduler and lr_scheduler_freq == 'iter':
                 lr_scheduler.step()
@@ -655,7 +776,7 @@ def distillation(module: nn.Module, num_classes: int,
                                           _epoch=_epoch + start_epoch,
                                           verbose=verbose, indent=indent,
                                           label_train=label_train,
-                                          api=api,task=task,
+                                          api=api,task=task,after_loss_fn=after_loss_fn,adv_valid=adv_valid,
                                           **kwargs)
             cur_acc = validate_result[0]
             if cur_acc >= best_acc:
@@ -668,8 +789,7 @@ def distillation(module: nn.Module, num_classes: int,
                            indent=indent)
                 best_acc = cur_acc
                 if save:
-                    save_fn(file_path=file_path, folder_path=folder_path,
-                            suffix=suffix, verbose=verbose)
+                    save_fn(log_dir=log_dir, module=module,verbose=verbose)
             if verbose:
                 prints('-' * 50, indent=indent)
     module.zero_grad()
@@ -682,7 +802,7 @@ def dis_validate(module: nn.Module, num_classes: int,
              verbose: bool = True,
              writer=None, main_tag: str = 'valid',
              tag: str = '', _epoch: int = None,
-             label_train = False, api=False,task=None,
+             label_train = False, api=False,task=None,after_loss_fn=None,adv_valid=False,
              **kwargs) -> tuple[float, float]:
     r"""Evaluate the model.
 
@@ -694,15 +814,23 @@ def dis_validate(module: nn.Module, num_classes: int,
     forward_fn =  module.__call__
 
     logger = MetricLogger()
-    if api is not None:
+    # if api is not None:
+    #     logger.create_meters(gt_loss=None, gt_acc1=None, 
+    #                          hapi_loss=None, hapi_acc1=None)
+    # else:
+    #     # logger.create_meters( gt_loss=None, gt_acc1=None, 
+    #     #                     hapi_loss=None, hapi_acc1=None,
+    #     #                     tt=None,tf=None,ft=None,ff=None)
+    #     logger.create_meters( gt_loss=None, gt_acc1=None, 
+    #                         hapi_loss=None, hapi_acc1=None)
+    if adv_valid:
+        logger.create_meters(gt_loss=None, gt_acc1=None, 
+                             hapi_loss=None, hapi_acc1=None,
+                             adv_loss=None, adv_acc1=None)
+    else:
         logger.create_meters(gt_loss=None, gt_acc1=None, 
                              hapi_loss=None, hapi_acc1=None)
-    else:
-        # logger.create_meters( gt_loss=None, gt_acc1=None, 
-        #                     hapi_loss=None, hapi_acc1=None,
-        #                     tt=None,tf=None,ft=None,ff=None)
-        logger.create_meters( gt_loss=None, gt_acc1=None, 
-                            hapi_loss=None, hapi_acc1=None)
+    
     loader_epoch = loader  
     if verbose:
         header: str = '{yellow}{0}{reset}'.format(print_prefix, **ansi)
@@ -721,6 +849,13 @@ def dis_validate(module: nn.Module, num_classes: int,
                     _label = _label.cuda()
                     hapi_label = hapi_label.cuda()
                     _output = forward_fn(_input)
+                    if adv_valid:
+                        adv_x, adv_api_soft_label, adv_api_hapi_label = after_loss_fn(_input=_input,_soft_label=_soft_label,mode='valid')
+                        adv_x = adv_x.cuda()
+                        adv_api_soft_label = adv_api_soft_label.cuda()
+                        adv_output = forward_fn(adv_x)
+                        adv_loss = float(loss_fn(_soft_label=adv_api_soft_label, _output=adv_output,  **kwargs))
+                        
 
 
                 case 'sentiment':
@@ -734,6 +869,8 @@ def dis_validate(module: nn.Module, num_classes: int,
                     hapi_label = hapi_label.cuda()
 
                     _output = forward_fn(input_ids=input_ids,attention_mask=attention_mask)
+                    if adv_valid:
+                        raise NotImplementedError(f'{adv_valid=} is not supported on sentiment yet.')
         
             gt_loss = float(loss_fn( _label=_label, _output=_output, **kwargs))
             if label_train:
@@ -750,21 +887,35 @@ def dis_validate(module: nn.Module, num_classes: int,
                     new_num_classes = 2
                 case 'emotion':
                     new_num_classes = num_classes
-            if api is not None:
-                hapi_acc1, hapi_acc5 = accuracy_fn(
-                        _output, hapi_label, num_classes=new_num_classes, topk=(1, 5))
-                gt_acc1, gt_acc5 = accuracy_fn(
-                    _output, _label, num_classes=new_num_classes, topk=(1, 5))
+            hapi_acc1, hapi_acc5 = accuracy_fn(
+                    _output, hapi_label, num_classes=new_num_classes, topk=(1, 5))
+            gt_acc1, gt_acc5 = accuracy_fn(
+                _output, _label, num_classes=new_num_classes, topk=(1, 5))
+            if adv_valid:
+                adv_acc1, adv_acc5 = accuracy_fn(
+                    adv_output, adv_api_hapi_label, num_classes=new_num_classes, topk=(1, 5))
+                
                 logger.update(n=batch_size,  gt_loss=float(gt_loss), gt_acc1=gt_acc1, 
-                          hapi_loss=float(hapi_loss), hapi_acc1=hapi_acc1)
-            else:
-                hapi_acc1, hapi_acc5 = accuracy_fn(
-                       _output, hapi_label, num_classes=new_num_classes, topk=(1, 5))
-                tt,tf,ft,ff = missclassification_fn(_output, _label, hapi_label,new_num_classes)
-                gt_acc1, gt_acc5 = accuracy_fn(
-                    _output, _label, num_classes=new_num_classes, topk=(1, 5))
-                logger.update(n=batch_size, gt_loss=float(gt_loss), gt_acc1=gt_acc1, 
-                          hapi_loss=float(hapi_loss), hapi_acc1=hapi_acc1)
+                            hapi_loss=float(hapi_loss), hapi_acc1=hapi_acc1,
+                            adv_loss=adv_loss, adv_acc1=adv_acc1)
+            else:    
+                logger.update(n=batch_size,  gt_loss=float(gt_loss), gt_acc1=gt_acc1, 
+                            hapi_loss=float(hapi_loss), hapi_acc1=hapi_acc1)
+            # if api is not None:
+            #     hapi_acc1, hapi_acc5 = accuracy_fn(
+            #             _output, hapi_label, num_classes=new_num_classes, topk=(1, 5))
+            #     gt_acc1, gt_acc5 = accuracy_fn(
+            #         _output, _label, num_classes=new_num_classes, topk=(1, 5))
+            #     logger.update(n=batch_size,  gt_loss=float(gt_loss), gt_acc1=gt_acc1, 
+            #               hapi_loss=float(hapi_loss), hapi_acc1=hapi_acc1)
+            # else:
+            #     hapi_acc1, hapi_acc5 = accuracy_fn(
+            #            _output, hapi_label, num_classes=new_num_classes, topk=(1, 5))
+            #     tt,tf,ft,ff = missclassification_fn(_output, _label, hapi_label,new_num_classes)
+            #     gt_acc1, gt_acc5 = accuracy_fn(
+            #         _output, _label, num_classes=new_num_classes, topk=(1, 5))
+            #     logger.update(n=batch_size, gt_loss=float(gt_loss), gt_acc1=gt_acc1, 
+            #               hapi_loss=float(hapi_loss), hapi_acc1=hapi_acc1)
                 # logger.update(n=batch_size, gt_loss=float(gt_loss), gt_acc1=gt_acc1, 
                 #           hapi_loss=float(hapi_loss), hapi_acc1=hapi_acc1,tt=tt,tf=tf,ft=ft,ff=ff)
     if api is not None:

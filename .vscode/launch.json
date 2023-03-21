@@ -18,7 +18,7 @@
             "env":{
                 "CUDA_VISIBLE_DEVICES":"3"
             },
-            "args":["--model","xlnet-base-cased","--batch_size","4","--num_classes","3","--grad_clip","3.0","--lr","5e-4","--api","amazon_hapi"]
+            "args":["--model","xlnet-base-cased","--batch_size","255","--num_classes","3","--grad_clip","3.0","--lr","5e-4","--api","amazon_hapi"]
 
 
         },        
@@ -47,7 +47,7 @@
             "env":{
                 "CUDA_VISIBLE_DEVICES":"3"
             },
-            "args":["--balance","--log_dir","--batch_size","256","--model","resnet50","--grad_clip","3.0","--lr","3e-5","--op_parameters","full","--validate_interval","1","--num_classes","7","--dataset","rafdb","--hapi_info","fer/rafdb/microsoft_fer/22-05-23"]
+            "args":["--batch_size","64","--model","resnet50","--grad_clip","3.0","--lr","3e-3","--op_parameters","full","--validate_interval","1","--num_classes","7","--dataset","rafdb","--hapi_info","fer/rafdb/microsoft_fer/22-05-23","--api","facepp","--adv_train","free","--adv_valid"]
 
 
         },
