@@ -293,13 +293,12 @@ class PGD(PGDoptimizer):
         if loss_fn is None and self.loss_fn is None:
             untarget_condition = self.target_class is None and self.target_idx == 0
 
-            def _loss_fn(_input: torch.Tensor, target: torch.Tensor, reduction: str = 'mean', **kwargs):
-                if target is None:
-                    target = self.forward_fn(_input)
+            def _loss_fn(target: torch.Tensor, reduction: str = 'mean', **kwargs):
+
                 if len(target.shape) == 1:
-                    loss = loss_fn_model( _label=target, reduction=reduction)
-                else:    
-                    loss = loss_fn_model( _soft_label=target, reduction=reduction)
+                    loss = loss_fn_model( _output=kwargs['_output'],_label=target, reduction=reduction)
+                else:
+                    loss = loss_fn_model( _output=kwargs['_output'],_soft_label=target, reduction=reduction)
                 return -loss if untarget_condition else loss
             loss_fn = _loss_fn
         loss_kwargs.update(target=target)

@@ -25,14 +25,42 @@ import hapi
 
 # CUDA_VISIBLE_DEVICES=3 python [main.py](http://main.py/) --adaptive --balance --sample_times 5 --optimizer SGD --epochs 50 --n_samples 1024 --log_dir --batch_size 256 --model resnet50 --grad_clip 3.0 --lr 0.1 --op_parameters full --validate_interval 5 --num_classes 7 --dataset rafdb --hapi_info fer/rafdb/microsoft_fer/22-05-23 --split_label_percent 0.05
 
+# def get_transform_base(mode: str, use_tuple: bool = False,
+#                            auto_augment: bool = False, crop_shape = 100,norm_par=None) -> transforms.Compose:
+#     if mode == 'train':
+#         transform_list = [
+#             transforms.RandomResizedCrop((crop_shape, crop_shape) if use_tuple else crop_shape),
+#             transforms.RandomHorizontalFlip(),
+#             # transforms.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.4), # noqa
+#         ]
+#         if auto_augment:
+#             transform_list.append(transforms.AutoAugment(
+#                 transforms.AutoAugmentPolicy.IMAGENET))
+#         transform_list.append(transforms.PILToTensor())
+#         transform_list.append(transforms.ConvertImageDtype(torch.float))
+#         transform = transforms.Compose(transform_list)
+#     else:
+#         # TODO: torchvision.prototypes.transforms._presets.ImageClassificationEval
+#         transform = transforms.Compose([
+#             transforms.Resize((crop_shape, crop_shape) if use_tuple else crop_shape),
+#             transforms.CenterCrop((crop_shape, crop_shape) if use_tuple else crop_shape),
+#             transforms.PILToTensor(),
+#             transforms.ConvertImageDtype(torch.float)])
+#     if norm_par is not None:
+#                 transform.transforms.append(transforms.Normalize(
+#                 mean=norm_par['mean'], std=norm_par['std']))
+#     return transform
+
 def get_transform_base(mode: str, use_tuple: bool = False,
                            auto_augment: bool = False, crop_shape = 100,norm_par=None) -> transforms.Compose:
     if mode == 'train':
-        transform_list = [
-            transforms.RandomResizedCrop((crop_shape, crop_shape) if use_tuple else crop_shape),
-            transforms.RandomHorizontalFlip(),
-            # transforms.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.4), # noqa
-        ]
+        # transform_list = [
+        #     # transforms.RandomResizedCrop((crop_shape, crop_shape) if use_tuple else crop_shape),
+        # transforms.RandomRotation(degrees=(0, 90)),
+        #     transforms.Grayscale(num_output_channels=3)
+        #     # transforms.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.4), # noqa
+        # ]
+        transform_list=[]
         if auto_augment:
             transform_list.append(transforms.AutoAugment(
                 transforms.AutoAugmentPolicy.IMAGENET))
@@ -42,8 +70,8 @@ def get_transform_base(mode: str, use_tuple: bool = False,
     else:
         # TODO: torchvision.prototypes.transforms._presets.ImageClassificationEval
         transform = transforms.Compose([
-            transforms.Resize((crop_shape, crop_shape) if use_tuple else crop_shape),
-            transforms.CenterCrop((crop_shape, crop_shape) if use_tuple else crop_shape),
+            # transforms.Resize((crop_shape, crop_shape) if use_tuple else crop_shape),
+            # transforms.CenterCrop((crop_shape, crop_shape) if use_tuple else crop_shape),
             transforms.PILToTensor(),
             transforms.ConvertImageDtype(torch.float)])
     if norm_par is not None:

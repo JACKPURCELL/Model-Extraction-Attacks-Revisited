@@ -132,7 +132,7 @@ class PGDoptimizer(optim.Optimizer):
                      loss_kwargs: dict[str, torch.Tensor] = {},
                      **kwargs):
         current_loss_kwargs = {k: v[current_idx] for k, v in loss_kwargs.items()}
-        grad = self.calc_grad(loss_fn, self.forward_fn,adv_input[current_idx], loss_kwargs=current_loss_kwargs)
+        grad = self.calc_grad(loss_fn, adv_input[current_idx],self.forward_fn ,loss_kwargs=current_loss_kwargs)
         if self.grad_method != 'white' and 'middle' in output:
             real_grad = self.whitebox_grad(loss_fn, adv_input[current_idx], loss_kwargs=current_loss_kwargs)
             prints('cos<real, est> = ',

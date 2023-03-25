@@ -20,6 +20,7 @@ from pytorch_transformers import AdamW  # Adam's optimization w/ fixed weight de
 
 from dataset.imdb import IMDB
 from dataset.rafdb import RAFDB
+from dataset.kdef import KDEF
 from utils.model import distillation,train
 from torch.utils.data import Dataset,Subset
 
@@ -125,6 +126,10 @@ if args.dataset == 'imdb':
 elif args.dataset == 'rafdb':
     train_dataset = RAFDB(input_directory=os.path.join('/data/jc/data/image/RAFDB',"train"),hapi_data_dir=args.hapi_data_dir,hapi_info=args.hapi_info,api=args.api)
     test_dataset = RAFDB(input_directory=os.path.join('/data/jc/data/image/RAFDB',"valid"),hapi_data_dir=args.hapi_data_dir,hapi_info=args.hapi_info,api=args.api)
+    task = 'emotion'
+elif args.dataset == 'kdef':
+    train_dataset = KDEF(input_directory=os.path.join('/data/jc/data/image/KDEF_and_AKDEF/KDEF_spilit',"train"),hapi_data_dir=args.hapi_data_dir,hapi_info=args.hapi_info,api=args.api)
+    test_dataset = KDEF(input_directory=os.path.join('/data/jc/data/image/KDEF_and_AKDEF/KDEF_spilit',"valid"),hapi_data_dir=args.hapi_data_dir,hapi_info=args.hapi_info,api=args.api)
     task = 'emotion'
     
 def get_sampler(train_dataset):
@@ -243,6 +248,9 @@ if args.log_dir:
         log_dir += "_balance"
     if args.adaptive:
         log_dir += "adaptive"
+    if args.adv_train:
+        log_dir += "_advtrain"
+
 else:
     log_dir = 'runs/debug'
     
