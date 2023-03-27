@@ -25,6 +25,9 @@ def get_transform_base(mode: str, use_tuple: bool = False,
         #     transforms.Grayscale(num_output_channels=3)
         #     # transforms.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.4), # noqa
         # ]
+    
+        # transforms.RandomApply(torch.nn.ModuleList([transforms.RandomRotation(degrees=(0, 90)), ]), p=0.5)
+        # transforms.RandomApply(torch.nn.ModuleList([transforms.Grayscale(num_output_channels=3), ]), p=0.5)
         transform_list=[]
         if auto_augment:
             transform_list.append(transforms.AutoAugment(
@@ -92,7 +95,6 @@ class KDEF(datasets.ImageFolder):
         sample = self.loader(path)
         match self.api:
             case 'amazon':
-                raise ValueError('Amazon API is not supported')
                 with open(os.path.join('/data/jc/data/image/KDEF_and_AKDEF', 'amazon_api', path.split('/')[-1]), mode='r') as p:
                     api_result = json.load(p)
             case 'facepp':
@@ -121,7 +123,6 @@ class KDEF(datasets.ImageFolder):
                     soft_label = torch.ones(7)*0.14285714285714285
                     hapi_label = torch.tensor(6)
             case 'amazon':
-                raise ValueError('Amazon API is not supported')
                 soft_label = torch.ones(7)
                 if len(api_result[0]) != 1:
                     soft_label[0] = api_result[0]['ANGRY']*0.01

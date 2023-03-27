@@ -25,32 +25,7 @@ def get_func_key(func: Callable[..., torch.Tensor]) -> str:
 
 
 
-@torch.no_grad()
-def generate_target(module: nn.Module, _input: torch.Tensor,
-                    idx: int = 1, same: bool = False
-                    ) -> torch.Tensor:
-    r"""Generate target labels of a batched input based on
-        the classification confidence ranking index.
 
-    Args:
-        module (torch.nn.Module): The module to process.
-        _input (torch.Tensor): The input tensor.
-        idx (int): The classification confidence
-            rank of target class.
-            Defaults to ``1``.
-        same (bool): Generate the same label
-            for all samples using mod.
-            Defaults to ``False``.
-
-    Returns:
-        torch.Tensor:
-            The generated target label with shape ``(N)``.
-    """
-    _output: torch.Tensor = module(_input)
-    target = _output.argsort(dim=-1, descending=True)[:, idx]
-    if same:
-        target = repeat_to_batch(target.mode(dim=0)[0], len(_input))
-    return target
 
 class PGD(PGDoptimizer):
     r"""PGD Adversarial Attack.
@@ -119,6 +94,34 @@ class PGD(PGDoptimizer):
         repeat_idx = _classification.eq(_label)
         return _input[repeat_idx], _label[repeat_idx]
     
+    @torch.no_grad()
+    def generate_target(self,  _input: torch.Tensor,
+                        idx: int = 1, same: bool = False
+                        ) -> torch.Tensor:
+        r"""Generate target labels of a batched input based on
+            the classification confidence ranking index.
+
+        Args:
+            module (torch.nn.Module): The module to process.
+            _input (torch.Tensor): The input tensor.
+            idx (int): The classification confidence
+                rank of target class.
+                Defaults to ``1``.
+            same (bool): Generate the same label
+                for all samples using mod.
+                Defaults to ``False``.
+
+        Returns:
+            torch.Tensor:
+                The generated target label with shape ``(N)``.
+        """
+        _output: torch.Tensor = self.forward_fn(_input)
+        target = _output.argsort(dim=-1, descending=True)[:, idx]
+        if same:
+            target = repeat_to_batch(target.mode(dim=0)[0], len(_input))
+        return target
+
+
     def get_prob(self, _input: torch.Tensor, **kwargs) -> torch.Tensor:
         r"""Get the probability classification vector of :attr:`_input`.
 
