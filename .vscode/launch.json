@@ -47,7 +47,7 @@
             "env":{
                 "CUDA_VISIBLE_DEVICES":"3"
             },
-            "args":["--batch_size","64","--model","resnet50","--grad_clip","3.0","--lr","3e-4","--op_parameters","full","--validate_interval","1","--num_classes","7","--dataset","kdef","--hapi_info","fer/rafdb/microsoft_fer/22-05-23","--api","amazon"]
+            "args":["--adv_train","pgd","--batch_size","2","--model","resnet50","--grad_clip","3.0","--lr","3e-4","--op_parameters","full","--validate_interval","1","--num_classes","7","--dataset","kdef","--hapi_info","fer/rafdb/microsoft_fer/22-05-23","--api","amazon"]
 
 
         },

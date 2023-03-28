@@ -76,7 +76,7 @@ parser.add_argument('--sample_times', type=int)
 
 parser.add_argument('--api', type=str)
 parser.add_argument('--lr_scheduler_freq', type=str,default='epoch')
-parser.add_argument('--adv_train', choices=[None, 'pgd', 'free', 'trades'],
+parser.add_argument('--adv_train', choices=[None, 'pgd', 'free', 'cw'],
                            help='adversarial training (default: None)')
 parser.add_argument('--adv_valid', action='store_true')
 
@@ -118,6 +118,8 @@ elif 'roberta' in args.model:
     model = getattr(models,'roberta')(parallel=parallel,model_name=args.model,num_classes=args.num_classes)
 elif 'vgg' in args.model:
     model = getattr(models,'vgg')(parallel=parallel,model_name=args.model,num_classes=args.num_classes)
+    
+model.load_state_dict(torch.load('/home/jkl6486/hermes/runs/fer_rafdb_facepp_fer_22-05-23_ep50_num_classes_7_lr0.0003_bs64_Lion_full_resnet50_percent_1.0_labeltrainfacepp_lr_schedulerdropout/model.pth'))
 # Initialize train & test datasets
 if args.dataset == 'imdb':  
     train_dataset = IMDB(input_directory=os.path.join(args.dataset_path,"aclImdb/test"),tokenizer=model.tokenizer,hapi_data_dir=args.hapi_data_dir,hapi_info=args.hapi_info,retokenize=args.retokenize,api=args.api,max_length=args.max_length)

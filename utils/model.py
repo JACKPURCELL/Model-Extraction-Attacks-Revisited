@@ -16,13 +16,13 @@ import torch.nn as nn
 import torch
 import boto3
 
-from adversirial.cw import cw_l2_attack
+
 
 client = boto3.client('rekognition')
 
 import torch.nn.functional as F
 import numpy as np
-from adversirial.pgd_new import pgd_attack
+
 
 from optimizer.optim import Optimizer
 from utils.tensor import add_noise
@@ -41,6 +41,8 @@ BERT parameters, for the IMDB dataset.
 
 import itertools
 from torch.utils.data import DataLoader
+from torchattacks import CW
+from torchattacks import PGD
 
 # !pip install pytorch_transformers
 
@@ -363,16 +365,16 @@ def loss_fn(_input: torch.Tensor = None, _label: torch.Tensor = None,
 #     eni = eni[(-eni[:, 1]).argsort()]
 #     return eni[:n_samples], eni[:, 0].astype(int)[:n_samples]
 
-from adversirial.pgd import PGD
 
 
-
+from torchvision.utils import save_image
         
 def get_api(_input,x,api='amazon'):
-    adv_x_num = 0
+    adv_x_num = 400
 
     # define a transform to convert a tensor to PIL image
     transform = T.ToPILImage(mode='RGB')
+    convert_tensor = T.ToTensor()
 
     # convert the tensor to PIL image using above transform
     soft_label_batch = torch.zeros((x.shape[0], 7))
@@ -380,14 +382,17 @@ def get_api(_input,x,api='amazon'):
     adv_x_batch = torch.zeros_like(x)
     noface_num = 0
     for i in range(x.shape[0]):
-        img:Image = transform(x[i,:,:,:])
-        img_input:Image = transform(_input[i,:,:,:])
+        # img:Image = transform(x[i,:,:,:])
+        # img_input:Image = transform(_input[i,:,:,:])
 
-        path = os.path.join('/data/jc/data/image/adv_x', str(adv_x_num)+'.jpg')
-        path_input = os.path.join('/data/jc/data/image/adv_x', str(adv_x_num)+'_input.jpg')
+                    
+        path = os.path.join('/data/jc/data/image/adv_x', str(adv_x_num)+'.png')
+        path_input = os.path.join('/data/jc/data/image/adv_x', str(adv_x_num)+'_input.png')
+        save_image(x[i,:,:,:],path,'png')
+        save_image(_input[i,:,:,:],path_input,'png')
         adv_x_num += 1             
-        img.save(path, format='JPEG', subsampling=0, quality=100)
-        img_input.save(path_input, format='JPEG', subsampling=0, quality=100)
+        # img.save(path, format='PNG', subsampling=0, quality=100)
+        # img_input.save(path_input, format='PNG', subsampling=0, quality=100)
         
         match api:
             case 'facepp':
@@ -458,7 +463,7 @@ def get_api(_input,x,api='amazon'):
                         hapi_label = torch.argmax(soft_label)
                         soft_label_batch[i-noface_num,:] = soft_label
                         hapi_label_batch[i-noface_num] = hapi_label
-                        adv_x_batch[i-noface_num,:,:,:] = x[i,:,:,:]
+                        adv_x_batch[i-noface_num,:,:,:] = convert_tensor(Image.open(path))
                     else:
                         # 'HAPPY'|'SAD'|'ANGRY'|'CONFUSED'|'DISGUSTED'|'SURPRISED'|'CALM'|'UNKNOWN'|'FEAR',
                         # print('no face')
@@ -470,22 +475,6 @@ def get_api(_input,x,api='amazon'):
                 raise NotImplementedError
     return adv_x_batch[:x.shape[0]-noface_num],soft_label_batch[:x.shape[0]-noface_num],hapi_label_batch[:x.shape[0]-noface_num]                          
 
-# def adv_loss(pgd:PGD,api,_input: torch.Tensor,  _soft_label: torch.Tensor,forward_fn,
-#                 adv_train: str = None,**kwargs) -> torch.Tensor:
-#     adv_train = adv_train
-#     # loss_fn = loss_fn if callable(loss_fn) else self.loss
-
-#     adv_x, _ = pgd.optimize(_input=_input, target=_soft_label,
-#                                     iteration=7,
-#                                     pgd_alpha=2/255,
-#                                     pgd_eps=8/255,
-#                                     random_init=False)
-#     adv_x = _input + (adv_x - _input).detach()
-#     _adv_soft_label,_adv_hapi_label = _soft_label,torch.argmax(_soft_label,dim=1)
-
-#     # _adv_soft_label,_adv_hapi_label = get_api(adv_x,api)
-    
-#     return adv_x,_adv_soft_label,_adv_hapi_label,loss_fn(_output=forward_fn(adv_x), _soft_label=_adv_soft_label)
 
                
 def distillation(module: nn.Module, pgd_set,num_classes: int,
@@ -520,67 +509,32 @@ def distillation(module: nn.Module, pgd_set,num_classes: int,
     after_loss_fn = None
     forward_fn =  module.__call__
     if adv_train is not None or adv_valid:
-        pgd = PGD(forward_fn,pgd_set,pgd_alpha=2/255, pgd_eps=8/255,
-                iteration=adv_train_iter, stop_threshold=None,
-                target_idx=0,
-            random_init=False,
-                clip_min=0.0, clip_max=1.0)
+        if adv_train == 'pgd':
+            pgd = PGD(module, eps=4/255,alpha=2/255, steps=8, random_start=True)
+        elif adv_train == 'cw':
+            cw = CW(module, c=1, kappa=0, steps=50, lr=0.01)
+        else:
+            raise NotImplementedError(f'{adv_train=} is not supported yet.')
         
-        def after_loss_fn(_input: torch.Tensor,  _soft_label: torch.Tensor=None, _output:torch.Tensor=None, optimizer: Optimizer=None,  mode='train',**kwargs):
+        def after_loss_fn(_input: torch.Tensor,  _label,_soft_label: torch.Tensor=None, _output:torch.Tensor=None, optimizer: Optimizer=None,  mode='train',**kwargs):
             
             # if pre_conditioner is not None:
             #     pre_conditioner.reset()
 
-            if adv_train == 'free' and mode == 'train':
-                optimizer.zero_grad()
-                module.zero_grad()
-                #TODO:need to verify _soft_label
-                noise = pgd.init_noise(_input.shape, pgd_eps=8/255,
-                                            random_init=False,
-                                            device=_input.device)
-                adv_x = add_noise(x=_input, noise=noise, universal=pgd.universal,
-                                    clip_min=pgd.clip_min, clip_max=pgd.clip_max)
-                noise.data = pgd.valid_noise(adv_x, _input)
-                for m in range(adv_train_iter):
-                    loss = loss_fn(_output=forward_fn(adv_x), _soft_label=_output)
 
-                    loss.backward()
-                    optimizer.step()
-                    optimizer.zero_grad()
-                    module.zero_grad()
-                    # self.eval()
-                    #找到分类边缘的advx
-                    adv_x, _ = pgd.optimize(_input=_input, noise=noise, target=_output, iteration=1,
-                                                    pgd_alpha=2/255, pgd_eps=8/255)
-                    #拟合分类边缘的advx
-                    if m == adv_train_iter - 1:    
-                        # _adv_soft_label,_adv_hapi_label = _soft_label,torch.argmax(_soft_label,dim=1)
-                        adv_x,_adv_soft_label,_adv_hapi_label = get_api(_input, adv_x,api)
-                        loss = loss_fn(_output=forward_fn(adv_x.cuda()), _soft_label=_adv_soft_label.cuda())  
-                        return _adv_soft_label,_adv_hapi_label
-            elif adv_train == 'pgd' or mode == 'valid':
-                adv_x = pgd_attack(forward_fn,optimizer,_input,torch.argmax(_output,dim=-1),eps=4/255,alpha=2/255,iters=1)
-                # adv_x, _ = pgd.optimize(_input=_input, target=_output,iteration=10,
-                #                     pgd_alpha=0.1,
-                #                     pgd_eps=4/255,
-                #                     random_init=True)
-                # adv_x = _input + (adv_x - _input).detach() 
-                adv_x,_adv_soft_label,_adv_hapi_label = get_api(_input,adv_x,api)
-
-                adv_x = adv_x.cuda()
-                _adv_soft_label= _adv_soft_label.cuda()
-               
-                loss = loss_fn(_output=forward_fn(adv_x), _soft_label=_adv_soft_label)
+            if adv_train == 'pgd' or mode == 'valid':
+                # adv_x = pgd(_input,torch.argmax(_output,dim=-1))
+                adv_x = pgd(_input,_label)
             elif adv_train == 'cw':
-                adv_x = cw_l2_attack(forward_fn,_input,torch.argmax(_output,dim=-1))
-                adv_x,_adv_soft_label,_adv_hapi_label = get_api(_input,adv_x,api)
-
-                adv_x = adv_x.cuda()
-                _adv_soft_label= _adv_soft_label.cuda()
-               
-                loss = loss_fn(_output=forward_fn(adv_x), _soft_label=_adv_soft_label)
+                adv_x = cw(_input,_label)
+                # adv_x = cw(_input,torch.argmax(_output,dim=-1))
             else:
                 raise NotImplementedError(f'{adv_train=} is not supported yet.')
+            
+            adv_x,_adv_soft_label,_adv_hapi_label = get_api(_input,adv_x,api)
+            adv_x = adv_x.cuda()
+            _adv_soft_label= _adv_soft_label.cuda()
+            loss = loss_fn(_output=forward_fn(adv_x), _soft_label=_adv_soft_label)
             
             if mode == 'train':
                 loss.backward()    
@@ -661,19 +615,22 @@ def distillation(module: nn.Module, pgd_set,num_classes: int,
         #     mode = 'train_ADV_STU'  #kl loss / return adv data
         #     print(_epoch,mode)
 
-        if _epoch >15 and adv_train:
-            for adv_x_inlist, adv_soft_label_inlist in zip(adv_x_list, adv_soft_label_list):
-                optimizer.zero_grad()
-                loss = loss_fn( _soft_label=adv_soft_label_inlist, _output=forward_fn(adv_x_inlist))
-                loss.backward()
-                if grad_clip is not None:
-                    nn.utils.clip_grad_norm_(params, grad_clip)
-                optimizer.step()
+#reuse
+        # if _epoch >15 and adv_train:
+        #     for adv_x_inlist, adv_soft_label_inlist in zip(adv_x_list, adv_soft_label_list):
+        #         optimizer.zero_grad()
+        #         loss = loss_fn( _soft_label=adv_soft_label_inlist, _output=forward_fn(adv_x_inlist))
+        #         loss.backward()
+        #         if grad_clip is not None:
+        #             nn.utils.clip_grad_norm_(params, grad_clip)
+        #         optimizer.step()
 
         
         for i, data in enumerate(loader_epoch):
-            if _epoch >15 and adv_train:
-                continue
+#reuse
+            
+            # if _epoch >15 and adv_train:
+            #     continue
 
             if adv_train:    
                 if i>_epoch*2.46 or i<(_epoch-1)*2.46:
@@ -726,29 +683,29 @@ def distillation(module: nn.Module, pgd_set,num_classes: int,
                         _output = forward_fn(_input)
                         if adv_train:
                             optimizer.zero_grad()
-                            loss, adv_x, _adv_soft_label, _adv_hapi_label = after_loss_fn(_input=_input,_output=_output,optimizer=optimizer)
+                            loss, adv_x, _adv_soft_label, _adv_hapi_label = after_loss_fn(_input=_input,_label=_label,_output=_output,optimizer=optimizer)
                             if grad_clip is not None:
                                 nn.utils.clip_grad_norm_(params, grad_clip)
                             optimizer.step()
                             
-                            if i == 0 and _epoch == 1:
-                                adv_x_list = []
-                                adv_soft_label_list =[]
+                            # if i == 0 and _epoch == 1:
+                            #     adv_x_list = []
+                            #     adv_soft_label_list =[]
                                 
-                            if len(adv_x_list) != 0:
-                                # print(len(adv_x_list))
-                                for adv_x_inlist, adv_soft_label_inlist in zip(adv_x_list, adv_soft_label_list):
-                                    optimizer.zero_grad()
-                                    loss = loss_fn( _soft_label=adv_soft_label_inlist, _output=forward_fn(adv_x_inlist))
-                                    loss.backward()
-                                    if grad_clip is not None:
-                                        nn.utils.clip_grad_norm_(params, grad_clip)
-                                    optimizer.step()
+                            # if len(adv_x_list) != 0:
+                            #     # print(len(adv_x_list))
+                            #     for adv_x_inlist, adv_soft_label_inlist in zip(adv_x_list, adv_soft_label_list):
+                            #         optimizer.zero_grad()
+                            #         loss = loss_fn( _soft_label=adv_soft_label_inlist, _output=forward_fn(adv_x_inlist))
+                            #         loss.backward()
+                            #         if grad_clip is not None:
+                            #             nn.utils.clip_grad_norm_(params, grad_clip)
+                            #         optimizer.step()
                                     
-                            adv_x_list.append(adv_x)
-                            adv_soft_label_list.append(_adv_soft_label)
+                            # adv_x_list.append(adv_x)
+                            # adv_soft_label_list.append(_adv_soft_label)
                         elif label_train:
-                            loss = loss_fn( _label=hapi_label, _output=_output)
+                            loss = loss_fn( _label=_label, _output=_output)
                         else:
                             loss = loss_fn( _soft_label=_soft_label, _output=_output)
 
@@ -766,7 +723,7 @@ def distillation(module: nn.Module, pgd_set,num_classes: int,
                     _output = forward_fn(input_ids=input_ids,attention_mask=attention_mask)
                     
                     if label_train:
-                        loss = loss_fn( _label=hapi_label, _output=_output)
+                        loss = loss_fn( _label=_label, _output=_output)
                     else:
                         loss = loss_fn( _soft_label=_soft_label, _output=_output)
                     
@@ -859,7 +816,7 @@ def distillation(module: nn.Module, pgd_set,num_classes: int,
                 hapi_label = hapi_label.cuda()
                 _output = forward_fn(_input)
                 if label_train:
-                    loss = loss_fn( _label=hapi_label, _output=_output)
+                    loss = loss_fn( _label=_label, _output=_output)
                 else:
                     loss = loss_fn( _soft_label=_soft_label, _output=_output)
                 if backward_and_step:
@@ -975,7 +932,7 @@ def dis_validate(module: nn.Module, num_classes: int,
                     hapi_label = hapi_label.cuda()
                     _output = forward_fn(_input)
                     if adv_valid:
-                        loss,adv_x, adv_api_soft_label, adv_api_hapi_label = after_loss_fn(_input=_input,_output=_output,mode='valid')
+                        loss,adv_x, adv_api_soft_label, adv_api_hapi_label = after_loss_fn(_input=_input,_label=_label,_output=_output,mode='valid')
                         adv_x = adv_x.cuda()
                         adv_api_soft_label = adv_api_soft_label.cuda()
                         adv_output = forward_fn(adv_x)
@@ -1037,12 +994,7 @@ def dis_validate(module: nn.Module, num_classes: int,
                         _label = _label.cuda()
                         hapi_label = hapi_label.cuda()
                         _output = forward_fn(_input)
-                        if adv_valid:
-                            loss,adv_x, adv_api_soft_label, adv_api_hapi_label = after_loss_fn(_input=_input,_output=_output,mode='valid')
-                            adv_x = adv_x.cuda()
-                            adv_api_soft_label = adv_api_soft_label.cuda()
-                            adv_output = forward_fn(adv_x)
-                            adv_loss = float(loss_fn(_soft_label=adv_api_soft_label, _output=adv_output,  **kwargs))
+                        
                             
 
 
