@@ -4,9 +4,7 @@
 import torch
 import torch.nn as nn
 import torchvision.models
-from torchvision.models.resnet import model_urls as urls
-from torchvision.models.resnet import conv3x3
-from collections import OrderedDict
+
 from optimizer.lion import Lion
 
 from torch.optim.optimizer import Optimizer

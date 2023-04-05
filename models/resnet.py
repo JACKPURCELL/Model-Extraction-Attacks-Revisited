@@ -4,9 +4,7 @@
 import torch
 import torch.nn as nn
 import torchvision.models
-from torchvision.models.resnet import model_urls as urls
-from torchvision.models.resnet import conv3x3
-from collections import OrderedDict
+
 
 from torch.optim.optimizer import Optimizer
 from torch.optim.lr_scheduler import _LRScheduler

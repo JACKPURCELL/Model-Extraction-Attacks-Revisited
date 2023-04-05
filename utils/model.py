@@ -10,6 +10,7 @@ import json
 import logging
 import os
 from typing import Callable, Iterable, Iterator
+import imageio
 import requests
 import tensorboard
 import torch.nn as nn
@@ -475,6 +476,49 @@ from torchvision.utils import save_image
 #                 raise NotImplementedError
 #     return adv_x_batch[:x.shape[0]-noface_num],soft_label_batch[:x.shape[0]-noface_num],hapi_label_batch[:x.shape[0]-noface_num]                          
 
+# def remove_indices(tensor, indices_to_remove, dim=0):
+#     """
+#     Remove specific indices from a tensor along a given dimension.
+    
+#     Args:
+#         tensor (torch.Tensor): The input tensor.
+#         indices_to_remove (list or torch.Tensor): The indices to remove.
+#         dim (int): The dimension along which to remove the indices.
+        
+#     Returns:
+#         torch.Tensor: The tensor with the specified indices removed.
+#     """
+#     all_indices = torch.arange(tensor.size(dim))
+#     mask = torch.ones_like(all_indices, dtype=torch.bool)
+    
+#     if isinstance(indices_to_remove, list):
+#         indices_to_remove = torch.tensor(indices_to_remove)
+        
+#     mask[indices_to_remove] = False
+#     new_indices = all_indices[mask]
+    
+#     return torch.index_select(tensor, dim, new_indices)
+
+# def save_image_b(tensor, filename):
+#     assert len(tensor.shape) == 3, "Input tensor must be a 3D (C, H, W) image tensor."
+#     array = (tensor.cpu().numpy() * 255).astype(np.uint8).transpose(1, 2, 0)
+#     imageio.imwrite(filename, array)
+
+# def load_image_b(filename):
+#     array = imageio.imread(filename).astype(np.float32) / 255
+#     tensor = torch.from_numpy(array).permute(2, 0, 1)
+#     return tensor
+# def save_image_b(tensor, filename):
+#     assert len(tensor.shape) == 3, "Input tensor must be a 3D (C, H, W) image tensor."
+#     array = (tensor.cpu().numpy() * 65535).astype(np.uint16).transpose(1, 2, 0)
+#     imageio.imwrite(filename, array)
+
+# def load_image_b(filename):
+#     array = imageio.imread(filename).astype(np.float32) / 65535
+#     tensor = torch.from_numpy(array).permute(2, 0, 1)
+#     return tensor.cuda()
+
+
 def get_api(_input,x,indices,api='amazon'):
     adv_x_num = 400
 
@@ -486,6 +530,7 @@ def get_api(_input,x,indices,api='amazon'):
     soft_label_batch = torch.zeros((x.shape[0], 7))
     hapi_label_batch = torch.zeros((x.shape[0]))
     adv_x_batch = torch.zeros_like(x)
+    new_indices = torch.zeros((x.shape[0]),dtype=torch.long)
     noface_num = 0
     for i in range(x.shape[0]):
         # img:Image = transform(x[i,:,:,:])
@@ -496,10 +541,12 @@ def get_api(_input,x,indices,api='amazon'):
         path_input = os.path.join('/data/jc/data/image/adv_x', str(adv_x_num)+'_input.png')
         save_image(x[i,:,:,:],path,'png')
         save_image(_input[i,:,:,:],path_input,'png')
+        # path_b = os.path.join('/data/jc/data/image/adv_x', str(adv_x_num)+'b'+'.png')
+        # path_input_b = os.path.join('/data/jc/data/image/adv_x', str(adv_x_num)+'b'+'_input.png')
+        # save_image_b(x[i,:,:,:],path_b)
+        # save_image_b(_input[i,:,:,:],path_input_b)
         adv_x_num += 1             
-        # img.save(path, format='PNG', subsampling=0, quality=100)
-        # img_input.save(path_input, format='PNG', subsampling=0, quality=100)
-        
+
         match api:
             case 'facepp':
                 with io.open(path, 'rb') as image:
@@ -533,13 +580,10 @@ def get_api(_input,x,indices,api='amazon'):
                         hapi_label = torch.argmax(soft_label)
                         soft_label_batch[i-noface_num,:] = soft_label
                         hapi_label_batch[i-noface_num] = hapi_label
-                        adv_x_batch[i-noface_num,:,:,:] = x[i,:,:,:]
-
+                        adv_x_batch[i-noface_num,:,:,:] = convert_tensor(Image.open(path))
+                        new_indices[i-noface_num] = indices[i]
                     else:
                         noface_num += 1
-                        arr1 = indices[0:i]
-                        arr2 = indices[i+1:]
-                        indices = torch.cat((arr1,arr2),dim=0)
 
                         # print('no face')
                         # soft_label = torch.ones(7)*0.14285714285714285
@@ -573,20 +617,22 @@ def get_api(_input,x,indices,api='amazon'):
                         hapi_label = torch.argmax(soft_label)
                         soft_label_batch[i-noface_num,:] = soft_label
                         hapi_label_batch[i-noface_num] = hapi_label
-                        adv_x_batch[i-noface_num,:,:,:] = convert_tensor(Image.open(path))
+                        adv_x_batch[i-noface_num,:,:,:] = x[i,:,:,:]
+                        new_indices[i-noface_num] = indices[i]
+                        
                     else:
                         # 'HAPPY'|'SAD'|'ANGRY'|'CONFUSED'|'DISGUSTED'|'SURPRISED'|'CALM'|'UNKNOWN'|'FEAR',
                         # print('no face')
                         # soft_label = torch.ones(7)*0.14285714285714285
                         # hapi_label = torch.tensor(6)
                         noface_num += 1
-                        arr1 = indices[0:i]
-                        arr2 = indices[i+1:]
-                        indices = torch.cat((arr1,arr2),dim=0)
+
 
             case _:
                 raise NotImplementedError
-    return adv_x_batch[:x.shape[0]-noface_num],soft_label_batch[:x.shape[0]-noface_num],hapi_label_batch[:x.shape[0]-noface_num],indices                          
+
+
+    return adv_x_batch[:x.shape[0]-noface_num],soft_label_batch[:x.shape[0]-noface_num],hapi_label_batch[:x.shape[0]-noface_num],new_indices[:x.shape[0]-noface_num]
 
                
 def distillation(module: nn.Module, pgd_set,num_classes: int,
@@ -622,7 +668,7 @@ def distillation(module: nn.Module, pgd_set,num_classes: int,
     forward_fn =  module.__call__
     if adv_train is not None or adv_valid:
         if adv_train == 'pgd':
-            pgd = PGD(module, eps=4/255,alpha=2/255, steps=8, random_start=True)
+            pgd = PGD(module, eps=4/255,alpha=2/255, steps=20, random_start=True)
         elif adv_train == 'cw':
             cw = CW(module, c=1, kappa=0, steps=50, lr=0.01)
         else:
@@ -631,27 +677,29 @@ def distillation(module: nn.Module, pgd_set,num_classes: int,
         def after_loss_fn(_input: torch.Tensor,  _label,_soft_label: torch.Tensor=None, _output:torch.Tensor=None, optimizer: Optimizer=None,  mode='train',**kwargs):
 
             num_samples = _input.shape[0]
-            num_to_select = int(0.2 * num_samples)
+            num_to_select = int(0.1 * num_samples)
             indices = torch.randperm(num_samples)[:num_to_select]
             selected_data = _input[indices]
             selected_label = _label[indices]
-
+            selected_output = _output[indices]
             if adv_train == 'pgd' or mode == 'valid':
                 # adv_x = pgd(_input,torch.argmax(_output,dim=-1))
-                adv_x = pgd(selected_data,selected_label)
+                adv_x = pgd(selected_data,torch.argmax(selected_output,dim=-1))
+                # adv_x = pgd(selected_data,selected_label)
             elif adv_train == 'cw':
-                adv_x = cw(selected_data,selected_label)
+                adv_x = cw(selected_data,torch.argmax(selected_output,dim=-1))
+                # adv_x = cw(selected_data,selected_label)
                 # adv_x = cw(_input,torch.argmax(_output,dim=-1))
             else:
                 raise NotImplementedError(f'{adv_train=} is not supported yet.')
             
-            adv_x,_adv_soft_label,_adv_hapi_label,indices = get_api(selected_data,adv_x,indices,api)
+            adv_x,_adv_soft_label,_adv_hapi_label,new_indices = get_api(selected_data,adv_x,indices,api)
             adv_x = adv_x.cuda()
             _adv_soft_label= _adv_soft_label.cuda()
-            indices = indices.cuda()
+            new_indices = new_indices.cuda()
             
-            _input[indices] = adv_x
-            _soft_label[indices] = _adv_soft_label
+            _input[new_indices] = adv_x
+            _soft_label[new_indices] = _adv_soft_label
             
             loss = loss_fn(_output=forward_fn(_input), _soft_label=_soft_label)
             
