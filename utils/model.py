@@ -699,13 +699,18 @@ def distillation(module: nn.Module, pgd_set,num_classes: int,
             new_indices = new_indices.cuda()
             
             _input[new_indices] = adv_x
+            ori_soft_label = _soft_label[new_indices]
             _soft_label[new_indices] = _adv_soft_label
+            adv_output = forward_fn(_input)
             
-            loss = loss_fn(_output=forward_fn(_input), _soft_label=_soft_label)
+            attack_succ = (1-float(torch.sum(torch.eq(torch.argmax(adv_output[new_indices],dim=-1),torch.argmax(_output[new_indices],dim=-1)).to(torch.int)).item() / len(ori_soft_label) ))* 100
+            ahapi_succ = (1-float(torch.sum(torch.eq(torch.argmax(ori_soft_label,dim=-1),torch.argmax(_adv_soft_label,dim=-1)).to(torch.int)).item() / len(ori_soft_label) ))* 100
+            
+            loss = loss_fn(_output=adv_output, _soft_label=_soft_label)
             
             if mode == 'train':
                 loss.backward()    
-                return loss,adv_x,_adv_soft_label,_adv_hapi_label
+                return loss,adv_x,_adv_soft_label,_adv_hapi_label,attack_succ,ahapi_succ
             else:
                 return loss,adv_x, _adv_soft_label, _adv_hapi_label
   
@@ -741,6 +746,9 @@ def distillation(module: nn.Module, pgd_set,num_classes: int,
     logger = MetricLogger()
     if mixmatch:
         logger.create_meters(loss=None)
+    elif adv_train:
+        logger.create_meters(   gt_acc1=None, 
+                          hapi_loss=None, hapi_acc1=None,attack_succ=None,ahapi_succ=None)
     else:
         logger.create_meters(   gt_acc1=None, 
                           hapi_loss=None, hapi_acc1=None)
@@ -850,12 +858,12 @@ def distillation(module: nn.Module, pgd_set,num_classes: int,
                         _output = forward_fn(_input)
                         if adv_train:
                             optimizer.zero_grad()
-                            loss, adv_x, _adv_soft_label, _adv_hapi_label = after_loss_fn(_input=_input,_label=_label,_soft_label=_soft_label,_output=_output,optimizer=optimizer)
+                            loss, adv_x, _adv_soft_label, _adv_hapi_label,attack_succ,ahapi_succ = after_loss_fn(_input=_input,_label=_label,_soft_label=_soft_label,_output=_output,optimizer=optimizer)
                             if grad_clip is not None:
                                 nn.utils.clip_grad_norm_(params, grad_clip)
                             optimizer.step()
                             
-                            
+                            logger.update(n=_adv_soft_label.shape[0],attack_succ=attack_succ,ahapi_succ=ahapi_succ)
                             
                             # if i == 0 and _epoch == 1:
                             #     adv_x_list = []
@@ -1006,7 +1014,7 @@ def distillation(module: nn.Module, pgd_set,num_classes: int,
             loss=(logger.meters['loss'].global_avg)
             if writer is not None:
                 writer.add_scalars(main_tag='loss/' + main_tag,
-                            tag_scalar_dict={tag: loss}, global_step=_epoch + start_epoch)        
+                            tag_scalar_dict={tag: loss}, global_step=_epoch + start_epoch) 
         else:
             gt_acc1, hapi_loss, hapi_acc1 = (
                     logger.meters['gt_acc1'].global_avg,
@@ -1019,7 +1027,16 @@ def distillation(module: nn.Module, pgd_set,num_classes: int,
                             tag_scalar_dict={tag: hapi_loss}, global_step=_epoch + start_epoch)
                 writer.add_scalars(main_tag='hapi_acc1/' + main_tag,
                         tag_scalar_dict={tag: hapi_acc1}, global_step=_epoch + start_epoch)
-            
+        
+        if adv_train:
+            attack_succ = logger.meters['attack_succ'].global_avg
+            ahapi_succ = logger.meters['ahapi_succ'].global_avg
+            if writer is not None:
+                writer.add_scalars(main_tag='attack_succ/' + main_tag,
+                            tag_scalar_dict={tag: attack_succ}, global_step=_epoch + start_epoch)
+                writer.add_scalars(main_tag='ahapi_succ/' + main_tag,
+                            tag_scalar_dict={tag: ahapi_succ}, global_step=_epoch + start_epoch)
+                    
         if validate_interval != 0 and (_epoch % validate_interval == 0 or _epoch == epochs):
             validate_result = validate_fn(module=module,
                                           num_classes=num_classes,
@@ -1280,6 +1297,209 @@ def dis_validate(module: nn.Module, num_classes: int,
 
 
 
+def attack_validate(module: nn.Module, num_classes: int,
+             loader: torch.utils.data.DataLoader,
+             print_prefix: str = 'Validate', indent: int = 0,
+             verbose: bool = True,
+             writer=None, main_tag: str = 'valid',
+             tag: str = '', _epoch: int = None,
+             label_train = False, api=False,task=None,after_loss_fn=None,adv_valid=False,
+             **kwargs) -> tuple[float, float]:
+    r"""Evaluate the model.
+
+    Returns:
+        (float, float): Accuracy and loss.
+    """
+    module.eval()
+   
+    forward_fn =  module.__call__
+
+    logger = MetricLogger()
+    if adv_valid:
+        logger.create_meters(gt_loss=None, gt_acc1=None, 
+                             hapi_loss=None, hapi_acc1=None,
+                             adv_loss=None, adv_acc1=None)
+    else:
+        logger.create_meters(gt_loss=None, gt_acc1=None, 
+                             hapi_loss=None, hapi_acc1=None)
+    
+    loader_epoch = loader  
+    if verbose:
+        header: str = '{yellow}{0}{reset}'.format(print_prefix, **ansi)
+        header = header.ljust(max(len(print_prefix), 30) + get_ansi_len(header))
+        loader_epoch = logger.log_every(loader, header=header,
+                                        tqdm_header='Batch',
+                                        indent=indent)
+    for data in loader_epoch:
+        if adv_valid:
+            match task:
+                case 'emotion':
+
+                    _input, _label, _soft_label, hapi_label  = data
+                    _input = _input.cuda()
+                    _soft_label = _soft_label.cuda()
+                    _label = _label.cuda()
+                    hapi_label = hapi_label.cuda()
+                    _output = forward_fn(_input)
+                    if adv_valid:
+                        loss,adv_x, adv_api_soft_label, adv_api_hapi_label = after_loss_fn(_input=_input,_label=_label,_output=_output,mode='valid')
+                        adv_x = adv_x.cuda()
+                        adv_api_soft_label = adv_api_soft_label.cuda()
+                        adv_output = forward_fn(adv_x)
+                        adv_loss = float(loss_fn(_soft_label=adv_api_soft_label, _output=adv_output,  **kwargs))
+                        
+
+
+                case 'sentiment':
+                    # input_ids, token_type_ids, attention_mask, _label, _soft_label, hapi_label  = data
+                    input_ids, attention_mask, _label, _soft_label, hapi_label  = data
+                    input_ids = input_ids.cuda()
+                    # token_type_ids = token_type_ids.cuda()
+                    attention_mask = attention_mask.cuda()
+                    _label = _label.cuda()
+                    _soft_label = _soft_label.cuda()
+                    hapi_label = hapi_label.cuda()
+
+                    _output = forward_fn(input_ids=input_ids,attention_mask=attention_mask)
+                    if adv_valid:
+                        raise NotImplementedError(f'{adv_valid=} is not supported on sentiment yet.')
+        
+            gt_loss = float(loss_fn( _label=_label, _output=_output, **kwargs))
+            if label_train:
+                hapi_loss = float(loss_fn( _label=hapi_label, _output=_output,  **kwargs))
+            else:    
+                hapi_loss = float(loss_fn( _soft_label=_soft_label, _output=_output,  **kwargs))
+
+
+
+            batch_size = int(_label.size(0))
+            match task:
+                case 'sentiment':
+                    _output = _output[:,:2]
+                    new_num_classes = 2
+                case 'emotion':
+                    new_num_classes = num_classes
+            hapi_acc1, hapi_acc5 = accuracy_fn(
+                    _output, hapi_label, num_classes=new_num_classes, topk=(1, 5))
+            gt_acc1, gt_acc5 = accuracy_fn(
+                _output, _label, num_classes=new_num_classes, topk=(1, 5))
+            if adv_valid:
+                adv_acc1, adv_acc5 = accuracy_fn(
+                    adv_output, adv_api_hapi_label, num_classes=new_num_classes, topk=(1, 5))
+                
+                logger.update(n=batch_size,  gt_loss=float(gt_loss), gt_acc1=gt_acc1, 
+                            hapi_loss=float(hapi_loss), hapi_acc1=hapi_acc1,
+                            adv_loss=adv_loss, adv_acc1=adv_acc1)
+            else:    
+                logger.update(n=batch_size,  gt_loss=float(gt_loss), gt_acc1=gt_acc1, 
+                            hapi_loss=float(hapi_loss), hapi_acc1=hapi_acc1)
+        else:
+            with torch.no_grad():
+                match task:
+                    case 'emotion':
+
+                        _input, _label, _soft_label, hapi_label  = data
+                        _input = _input.cuda()
+                        _soft_label = _soft_label.cuda()
+                        _label = _label.cuda()
+                        hapi_label = hapi_label.cuda()
+                        _output = forward_fn(_input)
+                        
+                            
+
+
+                    case 'sentiment':
+                        # input_ids, token_type_ids, attention_mask, _label, _soft_label, hapi_label  = data
+                        input_ids, attention_mask, _label, _soft_label, hapi_label  = data
+                        input_ids = input_ids.cuda()
+                        # token_type_ids = token_type_ids.cuda()
+                        attention_mask = attention_mask.cuda()
+                        _label = _label.cuda()
+                        _soft_label = _soft_label.cuda()
+                        hapi_label = hapi_label.cuda()
+
+                        _output = forward_fn(input_ids=input_ids,attention_mask=attention_mask)
+                        if adv_valid:
+                            raise NotImplementedError(f'{adv_valid=} is not supported on sentiment yet.')
+            
+                gt_loss = float(loss_fn( _label=_label, _output=_output, **kwargs))
+                if label_train:
+                    hapi_loss = float(loss_fn( _label=hapi_label, _output=_output,  **kwargs))
+                else:    
+                    hapi_loss = float(loss_fn( _soft_label=_soft_label, _output=_output,  **kwargs))
+
+
+
+                batch_size = int(_label.size(0))
+                match task:
+                    case 'sentiment':
+                        _output = _output[:,:2]
+                        new_num_classes = 2
+                    case 'emotion':
+                        new_num_classes = num_classes
+                hapi_acc1, hapi_acc5 = accuracy_fn(
+                        _output, hapi_label, num_classes=new_num_classes, topk=(1, 5))
+                gt_acc1, gt_acc5 = accuracy_fn(
+                    _output, _label, num_classes=new_num_classes, topk=(1, 5))
+                if adv_valid:
+                    adv_acc1, adv_acc5 = accuracy_fn(
+                        adv_output, adv_api_hapi_label, num_classes=new_num_classes, topk=(1, 5))
+                    
+                    logger.update(n=batch_size,  gt_loss=float(gt_loss), gt_acc1=gt_acc1, 
+                                hapi_loss=float(hapi_loss), hapi_acc1=hapi_acc1,
+                                adv_loss=adv_loss, adv_acc1=adv_acc1)
+                else:    
+                    logger.update(n=batch_size,  gt_loss=float(gt_loss), gt_acc1=gt_acc1, 
+                                hapi_loss=float(hapi_loss), hapi_acc1=hapi_acc1)
+          
+    if api is not None:
+        gt_loss, gt_acc1, hapi_loss, hapi_acc1 = (logger.meters['gt_loss'].global_avg,
+                    logger.meters['gt_acc1'].global_avg,
+                 logger.meters['hapi_loss'].global_avg,
+                 logger.meters['hapi_acc1'].global_avg)
+        if writer is not None and _epoch is not None and main_tag:
+            from torch.utils.tensorboard import SummaryWriter
+            assert isinstance(writer, SummaryWriter)
+            writer.add_scalars(main_tag='gt_loss/' + main_tag,
+                        tag_scalar_dict={tag: gt_loss}, global_step=_epoch)
+            writer.add_scalars(main_tag='gt_acc1/' + main_tag,
+                        tag_scalar_dict={tag: gt_acc1}, global_step=_epoch) 
+            writer.add_scalars(main_tag='hapi_loss/' + main_tag,
+                        tag_scalar_dict={tag: hapi_loss}, global_step=_epoch)
+            writer.add_scalars(main_tag='hapi_acc1/' + main_tag,
+                        tag_scalar_dict={tag: hapi_acc1}, global_step=_epoch)
+
+    else:   
+        gt_loss, gt_acc1, hapi_loss, hapi_acc1,tt,tf,ft,ff = (logger.meters['gt_loss'].global_avg,
+                    logger.meters['gt_acc1'].global_avg,
+                    logger.meters['hapi_loss'].global_avg,
+                    logger.meters['hapi_acc1'].global_avg,
+                    logger.meters['tt'].global_avg,
+                    logger.meters['tf'].global_avg,
+                    logger.meters['ft'].global_avg,
+                    logger.meters['ff'].global_avg)
+
+        if writer is not None and _epoch is not None and main_tag:
+            from torch.utils.tensorboard import SummaryWriter
+            assert isinstance(writer, SummaryWriter)
+            writer.add_scalars(main_tag='gt_loss/' + main_tag,
+                        tag_scalar_dict={tag: gt_loss}, global_step=_epoch)
+            writer.add_scalars(main_tag='gt_acc1/' + main_tag,
+                        tag_scalar_dict={tag: gt_acc1}, global_step=_epoch)        
+            writer.add_scalars(main_tag='hapi_loss/' + main_tag,
+                        tag_scalar_dict={tag: hapi_loss}, global_step=_epoch)
+            writer.add_scalars(main_tag='hapi_acc1/' + main_tag,
+                        tag_scalar_dict={tag: hapi_acc1}, global_step=_epoch)
+            writer.add_scalars(main_tag='tt/' + main_tag,
+                            tag_scalar_dict={tag: tt}, global_step=_epoch)
+            writer.add_scalars(main_tag='tf/' + main_tag,
+                            tag_scalar_dict={tag: tf}, global_step=_epoch)
+            writer.add_scalars(main_tag='ft/' + main_tag,
+                            tag_scalar_dict={tag: ft}, global_step=_epoch)
+            writer.add_scalars(main_tag='ff/' + main_tag,
+                            tag_scalar_dict={tag: ff}, global_step=_epoch)
+
+    return hapi_acc1, hapi_loss
 
 
 def train(module: nn.Module, num_classes: int,
