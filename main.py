@@ -241,7 +241,7 @@ optimizer, lr_scheduler = model.define_optimizer(
 
  
 if args.log_dir:
-    log_dir = 'runs/'+args.hapi_info.replace('/','_')+"_ep"+str(args.epochs)+"_num_classes_"+str(args.num_classes)+"_lr"+str(args.lr)+"_bs"+str(args.batch_size)+"_"+args.optimizer+"_"+args.op_parameters+"_"+args.model+"_percent_"+str(args.split_label_percent)
+    log_dir = 'runs/'+"ep"+str(args.epochs)+"_num_classes_"+str(args.num_classes)+"_lr"+str(args.lr)+"_bs"+str(args.batch_size)+"_"+args.optimizer+"_"+args.op_parameters+"_"+args.model+"_percent_"+str(args.split_label_percent)
     if args.label_train:
         log_dir += "_labeltrain"
     if args.api:
