@@ -118,7 +118,9 @@ elif 'roberta' in args.model:
     model = getattr(models,'roberta')(parallel=parallel,model_name=args.model,num_classes=args.num_classes)
 elif 'vgg' in args.model:
     model = getattr(models,'vgg')(parallel=parallel,model_name=args.model,num_classes=args.num_classes)
-    
+tea_model =  getattr(models,'resnet')(parallel=parallel,model_name='resnet50',num_classes=args.num_classes)    
+tea_model.load_state_dict(torch.load('/home/jkl6486/hermes/runs/gtpretrain_kdef/model.pth'))
+
 # model.load_state_dict(torch.load('/home/jkl6486/hermes/runs/fer_rafdb_facepp_fer_22-05-23_ep50_num_classes_7_lr0.0003_bs64_Lion_full_resnet50_percent_1.0_labeltrainfacepp_lr_schedulerdropout/model.pth'))
 # Initialize train & test datasets
 if args.dataset == 'imdb':  
@@ -289,4 +291,5 @@ distillation(module=model,pgd_set = test_dataset,adv_train=args.adv_train,num_cl
              api=args.api,task=task,unlabel_dataset_indices=_unlabel_dataset.indices if args.adaptive else None,
              hapi_data_dir=args.hapi_data_dir,hapi_info=args.hapi_info,
              batch_size=args.batch_size,num_workers=args.num_workers,
-             n_samples = args.n_samples,adaptive=args.adaptive,get_sampler_fn=get_sampler,balance=args.balance,sample_times=args.sample_times)
+             n_samples = args.n_samples,adaptive=args.adaptive,get_sampler_fn=get_sampler,
+             balance=args.balance,sample_times=args.sample_times,tea_model=tea_model)

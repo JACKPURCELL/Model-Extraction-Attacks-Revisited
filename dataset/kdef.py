@@ -67,8 +67,8 @@ class KDEF(datasets.ImageFolder):
         if transform == 'Normal':
             transform = get_transform_base(
                 mode, use_tuple=True,
-                auto_augment=True, crop_shape = 224,norm_par={'mean': [0.509, 0.303, 0.221],'std': [0.217, 0.164, 0.121]})
-                # norm_par=None)
+                auto_augment=True, crop_shape = 224,
+                norm_par=None)
                 
                 # norm_par={'mean': [0.509, 0.303, 0.221],'std': [0.217, 0.164, 0.121]})
             # transform =transforms.Compose([
