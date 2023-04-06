@@ -1683,7 +1683,7 @@ def train(module: nn.Module, num_classes: int,
                                           verbose=verbose, indent=indent,
                                           **kwargs)
             cur_acc = validate_result[0]
-            if cur_acc >= best_acc:
+            if cur_acc >= 0:
                 best_validate_result = validate_result
                 if verbose:
                     prints('{purple}best result update!{reset}'.format(
