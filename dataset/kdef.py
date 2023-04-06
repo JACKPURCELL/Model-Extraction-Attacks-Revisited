@@ -59,13 +59,18 @@ class TransformTwice:
 class KDEF(datasets.ImageFolder):
     
     def __init__(self, input_directory=None, hapi_data_dir:str = None, hapi_info:str = None, api=None,transform='Normal'):
+#         0.5084671 0.3032051 0.2204921
+# 0.2170966 0.16445793 0.12108668
         mode = input_directory.split('/')[-1]
         if mode == 'valid':
             mode = 'test'
         if transform == 'Normal':
             transform = get_transform_base(
                 mode, use_tuple=True,
-                auto_augment=True, crop_shape = 224)
+                auto_augment=True, crop_shape = 224,norm_par={'mean': [0.509, 0.303, 0.221],'std': [0.217, 0.164, 0.121]})
+                # norm_par=None)
+                
+                # norm_par={'mean': [0.509, 0.303, 0.221],'std': [0.217, 0.164, 0.121]})
             # transform =transforms.Compose([
 
             #                         transforms.PILToTensor(),
@@ -73,8 +78,8 @@ class KDEF(datasets.ImageFolder):
         elif transform == 'mixmatch':
             transform = get_transform_base(
                 mode, use_tuple=True,
-                auto_augment=True, crop_shape = 224
-                )
+                auto_augment=True, crop_shape = 224)
+            #    norm_par={'mean': [0.509, 0.303, 0.221],'std': [0.217, 0.164, 0.121]})
             transform = TransformTwice(transform)
             
         super().__init__(root=input_directory,transform=transform)

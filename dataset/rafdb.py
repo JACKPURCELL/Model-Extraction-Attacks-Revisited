@@ -105,7 +105,11 @@ class RAFDB(datasets.ImageFolder):
                 auto_augment=False, crop_shape = 100,
                 norm_par={'mean': [0.485, 0.456, 0.406],'std': [0.229, 0.224, 0.225]})
             transform = TransformTwice(transform)
-            
+        else:
+            transform_list=[]
+            transform_list.append(transforms.PILToTensor())
+            transform_list.append(transforms.ConvertImageDtype(torch.float))
+            transform = transforms.Compose(transform_list)
         super().__init__(root=input_directory,transform=transform)
         hapi.config.data_dir = hapi_data_dir
         self.api = api
