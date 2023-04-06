@@ -119,7 +119,7 @@ elif 'roberta' in args.model:
 elif 'vgg' in args.model:
     model = getattr(models,'vgg')(parallel=parallel,model_name=args.model,num_classes=args.num_classes)
 tea_model =  getattr(models,'resnet')(parallel=parallel,model_name='resnet50',num_classes=args.num_classes)    
-tea_model.load_state_dict(torch.load('/home/jkl6486/hermes/runs/aaa/model.pth'))
+tea_model.load_state_dict(torch.load('/home/jkl6486/hermes/runs/bbb/model.pth'))
 print("loading===============")
 # model.load_state_dict(torch.load('/home/jkl6486/hermes/runs/fer_rafdb_facepp_fer_22-05-23_ep50_num_classes_7_lr0.0003_bs64_Lion_full_resnet50_percent_1.0_labeltrainfacepp_lr_schedulerdropout/model.pth'))
 # Initialize train & test datasets

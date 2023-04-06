@@ -540,106 +540,10 @@ def get_api(_input,x,indices,api='amazon',tea_model=None):
         adv_x_batch=x
         new_indices=indices
         return adv_x_batch,soft_label_batch,hapi_label_batch,new_indices
-    for i in range(x.shape[0]):
-        # img:Image = transform(x[i,:,:,:])
-        # img_input:Image = transform(_input[i,:,:,:])
-
-                    
-        path = os.path.join('/data/jc/data/image/adv_x', str(adv_x_num)+'.png')
-        path_input = os.path.join('/data/jc/data/image/adv_x', str(adv_x_num)+'_input.png')
-        save_image(x[i,:,:,:],path,'png')
-        save_image(_input[i,:,:,:],path_input,'png')
-        # path_b = os.path.join('/data/jc/data/image/adv_x', str(adv_x_num)+'b'+'.png')
-        # path_input_b = os.path.join('/data/jc/data/image/adv_x', str(adv_x_num)+'b'+'_input.png')
-        # save_image_b(x[i,:,:,:],path_b)
-        # save_image_b(_input[i,:,:,:],path_input_b)
-        adv_x_num += 1             
-
-        match api:
-            case 'facepp':
-                with io.open(path, 'rb') as image:
-                    data = {'api_key':'0KHi8-QNz1qcDUSAzpcbCSQBfBL8GZPJ',
-                    'api_secret':'0A_i8hjaXU4UqLbmpXKpj9qmEwzUqBn0',
-                    'image_base64':base64.b64encode(image.read()),
-                    'return_attributes':'emotion'}
-                    attempts = 0
-                    success = False
-                    while attempts < 3 and not success:
-                        try:
-                            r = requests.post(url = 'https://api-cn.faceplusplus.com/facepp/v3/detect', data = data)
-                            success = True 
-                        except:
-                            attempts += 1
-                            if attempts==3:
-                                print('no response')
-                                os._exit(0) 
-                    responses = r.text
-                    responses = json.loads(responses)
-                    soft_label = torch.ones(7)
-                    
-                    if len(responses['faces']) != 0:
-                        soft_label[0] = responses['faces'][0]['attributes']['emotion']['anger']
-                        soft_label[1] = responses['faces'][0]['attributes']['emotion']['disgust']
-                        soft_label[2] = responses['faces'][0]['attributes']['emotion']['fear']
-                        soft_label[3] = responses['faces'][0]['attributes']['emotion']['happiness']
-                        soft_label[4] = responses['faces'][0]['attributes']['emotion']['sadness']
-                        soft_label[5] = responses['faces'][0]['attributes']['emotion']['surprise']
-                        soft_label[6] = responses['faces'][0]['attributes']['emotion']['neutral']
-                        hapi_label = torch.argmax(soft_label)
-                        soft_label_batch[i-noface_num,:] = soft_label
-                        hapi_label_batch[i-noface_num] = hapi_label
-                        adv_x_batch[i-noface_num,:,:,:] = convert_tensor(Image.open(path))
-                        new_indices[i-noface_num] = indices[i]
-                    else:
-                        noface_num += 1
-
-                        # print('no face')
-                        # soft_label = torch.ones(7)*0.14285714285714285
-                        # hapi_label = torch.tensor(6)
-
-            case 'amazon':
-                
-                with io.open(path, 'rb') as image:
-                    responses = client.detect_faces(Image={'Bytes': image.read()},Attributes= [ "ALL" ])
-                    soft_label = torch.ones(7)
-                    
-                    if len(responses['FaceDetails']) != 0:
-                        api_result = [{
-                            responses['FaceDetails'][0]['Emotions'][0]["Type"] : responses['FaceDetails'][0]['Emotions'][0]["Confidence"],
-                            responses['FaceDetails'][0]['Emotions'][1]["Type"] : responses['FaceDetails'][0]['Emotions'][1]["Confidence"],
-                            responses['FaceDetails'][0]['Emotions'][2]["Type"] : responses['FaceDetails'][0]['Emotions'][2]["Confidence"],
-                            responses['FaceDetails'][0]['Emotions'][3]["Type"] : responses['FaceDetails'][0]['Emotions'][3]["Confidence"],
-                            responses['FaceDetails'][0]['Emotions'][4]["Type"] : responses['FaceDetails'][0]['Emotions'][4]["Confidence"],
-                            responses['FaceDetails'][0]['Emotions'][5]["Type"] : responses['FaceDetails'][0]['Emotions'][5]["Confidence"],
-                            responses['FaceDetails'][0]['Emotions'][6]["Type"] : responses['FaceDetails'][0]['Emotions'][6]["Confidence"],
-                            responses['FaceDetails'][0]['Emotions'][7]["Type"] : responses['FaceDetails'][0]['Emotions'][7]["Confidence"]
-                            
-                        }]
-                        soft_label[0] = api_result[0]['ANGRY']*0.01
-                        soft_label[1] = api_result[0]['DISGUSTED']*0.01
-                        soft_label[2] = api_result[0]['FEAR']*0.01
-                        soft_label[3] = api_result[0]['HAPPY']*0.01
-                        soft_label[4] = api_result[0]['SAD']*0.01
-                        soft_label[5] = api_result[0]['SURPRISED']*0.01
-                        soft_label[6] = api_result[0]['CALM']*0.01 + api_result[0]['CONFUSED']*0.01
-                        hapi_label = torch.argmax(soft_label)
-                        soft_label_batch[i-noface_num,:] = soft_label
-                        hapi_label_batch[i-noface_num] = hapi_label
-                        adv_x_batch[i-noface_num,:,:,:] = x[i,:,:,:]
-                        new_indices[i-noface_num] = indices[i]
-                        
-                    else:
-                        # 'HAPPY'|'SAD'|'ANGRY'|'CONFUSED'|'DISGUSTED'|'SURPRISED'|'CALM'|'UNKNOWN'|'FEAR',
-                        # print('no face')
-                        # soft_label = torch.ones(7)*0.14285714285714285
-                        # hapi_label = torch.tensor(6)
-                        noface_num += 1
-
-            case _:
-                raise NotImplementedError
+    
 
 
-    return adv_x_batch[:x.shape[0]-noface_num],soft_label_batch[:x.shape[0]-noface_num],hapi_label_batch[:x.shape[0]-noface_num],new_indices[:x.shape[0]-noface_num]
+    
 
                
 def distillation(module: nn.Module, pgd_set,num_classes: int,
