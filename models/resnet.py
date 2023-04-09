@@ -13,6 +13,7 @@ from typing import Generator, Iterator, Mapping
 from collections.abc import Iterable
 from adversirial.pgd import PGD
 from optimizer.lion import Lion
+from torchvision import transforms
 
         # group.add_argument('--adv_train', choices=[None, 'pgd', 'free', 'trades'],
         #                    help='adversarial training (default: None)')
@@ -45,13 +46,13 @@ class ResNet(nn.Module):
             self.model = nn.DataParallel(ModelClass(weights='DEFAULT')).cuda()
         else:
             self.model = ModelClass(weights='DEFAULT').cuda()
-            
+        self.transform = transforms.Normalize( mean=[0.509, 0.303, 0.221], std= [0.217, 0.164, 0.121])   
         self.model.fc = nn.Linear(in_features=2048, out_features=num_classes,bias=True).cuda()
 
 
 
     def forward(self, x):
-        return self.model(x)
+        return self.model(self.transform(x))
     
     def define_optimizer(
         self, parameters: str | Iterator[nn.Parameter] = 'full',

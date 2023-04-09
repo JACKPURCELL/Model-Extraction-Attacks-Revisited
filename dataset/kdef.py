@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+0.16%# -*- coding: utf-8 -*-
 import argparse
 import json
 import os
@@ -17,18 +17,15 @@ import re
 import hapi
 
 def get_transform_base(mode: str, use_tuple: bool = False,
-                           auto_augment: bool = False, crop_shape = 100,norm_par=None) -> transforms.Compose:
+                           auto_augment: bool = False, crop_shape = 224,norm_par=None) -> transforms.Compose:
     if mode == 'train':
-        # transform_list = [
-        #     # transforms.RandomResizedCrop((crop_shape, crop_shape) if use_tuple else crop_shape),
-        # transforms.RandomRotation(degrees=(0, 90)),
-        #     transforms.Grayscale(num_output_channels=3)
-        #     # transforms.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.4), # noqa
-        # ]
+        transform_list = [
+            transforms.RandomResizedCrop((crop_shape, crop_shape) if use_tuple else crop_shape),
+            transforms.RandomHorizontalFlip(),
+        ]
     
-        # transforms.RandomApply(torch.nn.ModuleList([transforms.RandomRotation(degrees=(0, 90)), ]), p=0.5)
-        # transforms.RandomApply(torch.nn.ModuleList([transforms.Grayscale(num_output_channels=3), ]), p=0.5)
-        transform_list=[]
+      
+        # transform_list=[]
         if auto_augment:
             transform_list.append(transforms.AutoAugment(
                 transforms.AutoAugmentPolicy.IMAGENET))
@@ -66,8 +63,8 @@ class KDEF(datasets.ImageFolder):
             mode = 'test'
         if transform == 'Normal':
             transform = get_transform_base(
-                mode, use_tuple=True,
-                auto_augment=True, crop_shape = 224,norm_par={'mean': [0.509, 0.303, 0.221],'std': [0.217, 0.164, 0.121]})
+                mode, use_tuple=False,
+                auto_augment=True, crop_shape = 224)
                 # norm_par=None)
                 
                 # norm_par={'mean': [0.509, 0.303, 0.221],'std': [0.217, 0.164, 0.121]})
@@ -77,7 +74,7 @@ class KDEF(datasets.ImageFolder):
             #                         transforms.ConvertImageDtype(torch.float)])
         elif transform == 'mixmatch':
             transform = get_transform_base(
-                mode, use_tuple=True,
+                mode, use_tuple=False,
                 auto_augment=True, crop_shape = 224)
             #    norm_par={'mean': [0.509, 0.303, 0.221],'std': [0.217, 0.164, 0.121]})
             transform = TransformTwice(transform)

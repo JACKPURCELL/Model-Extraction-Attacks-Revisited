@@ -701,6 +701,8 @@ def distillation(module: nn.Module, pgd_set,num_classes: int,
             _input[new_indices] = adv_x
             ori_soft_label = _soft_label[new_indices]
             _soft_label[new_indices] = _adv_soft_label
+            
+            
             adv_output = forward_fn(_input)
             
             attack_succ = (1-float(torch.sum(torch.eq(torch.argmax(adv_output[new_indices],dim=-1),torch.argmax(_output[new_indices],dim=-1)).to(torch.int)).item() / len(ori_soft_label) ))* 100
