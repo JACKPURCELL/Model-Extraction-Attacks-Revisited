@@ -52,6 +52,20 @@
 
         },
         {
+            "name": "maincifar10resnet.py",
+            "type": "python",
+            "request": "launch",
+            "program": "main.py",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "env":{
+                "CUDA_VISIBLE_DEVICES":"3"
+            },
+            "args":["--save","--label_train","--lr_scheduler","--batch_size","64","--model","resnet50","--grad_clip","3.0","--lr","3e-4","--op_parameters","full","--validate_interval","1","--num_classes","10","--dataset","cifar10","--epochs","15"]
+
+
+        },
+        {
             "name": "mainresnetmixmatch.py",
             "type": "python",
             "request": "launch",

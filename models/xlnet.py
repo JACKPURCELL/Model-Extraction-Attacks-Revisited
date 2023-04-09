@@ -25,13 +25,11 @@ TOKENIZERS_PARALLELISIM = True
 
 class XLNet(nn.Module):
 
-    def __init__(self,  num_classes=2, parallel = True, model_name = "xlnet-base-cased",**kwargs):
+    def __init__(self,  num_classes=2, model_name = "xlnet-base-cased",**kwargs):
         super(XLNet, self).__init__()
 
-        if parallel:
-            self.model = nn.DataParallel(XLNetForSequenceClassification.from_pretrained(model_name, num_labels=num_classes)).cuda()
-        else:
-            self.model = XLNetForSequenceClassification.from_pretrained(model_name, num_labels=num_classes).cuda()
+
+        self.model = XLNetForSequenceClassification.from_pretrained(model_name, num_labels=num_classes).cuda()
 
 
         self.tokenizer = XLNetTokenizer.from_pretrained(model_name)

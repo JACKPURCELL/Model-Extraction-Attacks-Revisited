@@ -12,6 +12,7 @@ from torch.optim.lr_scheduler import _LRScheduler
 import torch.utils.data
 from typing import Generator, Iterator, Mapping
 from collections.abc import Iterable
+from torchvision import transforms
 
     # available_models = [ "VisionTransformer",
     # "ViT_B_16_Weights",
@@ -26,21 +27,24 @@ from collections.abc import Iterable
     # "vit_h_14",]
 class ViT(nn.Module):
 
-    def __init__(self, model_name: str = 'vit_b_16',num_classes=7,parallel=True):
+    def __init__(self, norm_par=None,model_name: str = 'vit_b_16',num_classes=7):
         ModelClass = getattr(torchvision.models, model_name)
 
         super(ViT, self).__init__() 
-        if parallel:
-            self.model = nn.DataParallel(ModelClass(weights='DEFAULT')).cuda()
-        else:
-            self.model = ModelClass(weights='DEFAULT').cuda()
+
+        self.model = ModelClass(weights='DEFAULT').cuda()
+        if norm_par is not None:
+            self.norm_par = norm_par
+            self.transform = transforms.Normalize( mean=norm_par['mean'], std= norm_par['std'])   
         self.model.heads.head= nn.Linear(in_features=768, out_features=num_classes,bias=True).cuda()
 
 
         
 
     def forward(self, x):
-        return self.model(x)
+        if self.norm_par is None:
+            return self.model(x)
+        return self.model(self.transform(x))
     
     def define_optimizer(
         self, parameters: str | Iterator[nn.Parameter] = 'full',

@@ -21,6 +21,7 @@ from pytorch_transformers import AdamW  # Adam's optimization w/ fixed weight de
 from dataset.imdb import IMDB
 from dataset.rafdb import RAFDB
 from dataset.kdef import KDEF
+from dataset.cifar import CIFAR10
 from utils.model import distillation,train
 from torch.utils.data import Dataset,Subset
 
@@ -106,26 +107,8 @@ torch.backends.cudnn.deterministic = True
 # MAX_TOKENIZATION_LENGTH = 512
 
 
-print(args.model.split('-')[0])
 
-if 'resnet' in args.model:
-    model = getattr(models,'resnet')(parallel=parallel,model_name=args.model,num_classes=args.num_classes)
-elif 'xlnet' in args.model:
-    model = getattr(models,'xlnet')(parallel=parallel,model_name=args.model,num_classes=args.num_classes)
-elif 'vit' in args.model:
-    model = getattr(models,'vit')(parallel=parallel,model_name=args.model,num_classes=args.num_classes)
-elif 'roberta' in args.model:
-    model = getattr(models,'roberta')(parallel=parallel,model_name=args.model,num_classes=args.num_classes)
-elif 'vgg' in args.model:
-    model = getattr(models,'vgg')(parallel=parallel,model_name=args.model,num_classes=args.num_classes)
-    
-# model.load_state_dict(torch.load('/home/jkl6486/hermes/runs/fer_rafdb_facepp_fer_22-05-23_ep50_num_classes_7_lr0.0003_bs64_Lion_full_resnet50_percent_1.0_labeltrainfacepp_lr_schedulerdropout/model.pth'))
-# Initialize train & test datasets
-if args.dataset == 'imdb':  
-    train_dataset = IMDB(input_directory=os.path.join(args.dataset_path,"aclImdb/test"),tokenizer=model.tokenizer,hapi_data_dir=args.hapi_data_dir,hapi_info=args.hapi_info,retokenize=args.retokenize,api=args.api,max_length=args.max_length)
-    test_dataset = IMDB(input_directory=os.path.join(args.dataset_path,"aclImdb/train"),tokenizer=model.tokenizer,hapi_data_dir=args.hapi_data_dir,hapi_info=args.hapi_info,retokenize=args.retokenize,api=args.api,max_length=args.max_length)
-    task = 'sentiment'
-elif args.dataset == 'rafdb':
+if args.dataset == 'rafdb':
     train_dataset = RAFDB(input_directory=os.path.join('/data/jc/data/image/RAFDB',"train"),hapi_data_dir=args.hapi_data_dir,hapi_info=args.hapi_info,api=args.api)
     test_dataset = RAFDB(input_directory=os.path.join('/data/jc/data/image/RAFDB',"valid"),hapi_data_dir=args.hapi_data_dir,hapi_info=args.hapi_info,api=args.api)
     task = 'emotion'
@@ -133,7 +116,33 @@ elif args.dataset == 'kdef':
     train_dataset = KDEF(input_directory=os.path.join('/data/jc/data/image/KDEF_and_AKDEF/KDEF_spilit',"train"),hapi_data_dir=args.hapi_data_dir,hapi_info=args.hapi_info,api=args.api)
     test_dataset = KDEF(input_directory=os.path.join('/data/jc/data/image/KDEF_and_AKDEF/KDEF_spilit',"valid"),hapi_data_dir=args.hapi_data_dir,hapi_info=args.hapi_info,api=args.api)
     task = 'emotion'
+elif args.dataset == 'cifar10':
+    train_dataset = CIFAR10(mode='train')
+    test_dataset = CIFAR10(mode='valid')
+    task = 'cifar10'
     
+print(args.model.split('-')[0])
+
+if 'resnet' in args.model:
+    model = getattr(models,'resnet')(norm_par=train_dataset.norm_par,parallel=parallel,model_name=args.model,num_classes=args.num_classes)
+elif 'xlnet' in args.model:
+    model = getattr(models,'xlnet')(parallel=parallel,model_name=args.model,num_classes=args.num_classes)
+elif 'vit' in args.model:
+    model = getattr(models,'vit')(norm_par=train_dataset.norm_par,parallel=parallel,model_name=args.model,num_classes=args.num_classes)
+elif 'roberta' in args.model:
+    model = getattr(models,'roberta')(parallel=parallel,model_name=args.model,num_classes=args.num_classes)
+elif 'vgg' in args.model:
+    model = getattr(models,'vgg')(norm_par=train_dataset.norm_par,parallel=parallel,model_name=args.model,num_classes=args.num_classes)
+
+if parallel:
+    model = nn.DataParallel(model).cuda()    
+# model.load_state_dict(torch.load('/home/jkl6486/hermes/runs/fer_rafdb_facepp_fer_22-05-23_ep50_num_classes_7_lr0.0003_bs64_Lion_full_resnet50_percent_1.0_labeltrainfacepp_lr_schedulerdropout/model.pth'))
+# Initialize train & test datasets
+if args.dataset == 'imdb':  
+    train_dataset = IMDB(input_directory=os.path.join(args.dataset_path,"aclImdb/test"),tokenizer=model.tokenizer,hapi_data_dir=args.hapi_data_dir,hapi_info=args.hapi_info,retokenize=args.retokenize,api=args.api,max_length=args.max_length)
+    test_dataset = IMDB(input_directory=os.path.join(args.dataset_path,"aclImdb/train"),tokenizer=model.tokenizer,hapi_data_dir=args.hapi_data_dir,hapi_info=args.hapi_info,retokenize=args.retokenize,api=args.api,max_length=args.max_length)
+    task = 'sentiment'
+
 def get_sampler(train_dataset):
     from collections import Counter
     from torch.utils.data.sampler import WeightedRandomSampler    

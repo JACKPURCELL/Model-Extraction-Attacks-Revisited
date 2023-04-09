@@ -98,12 +98,12 @@ class RAFDB(datasets.ImageFolder):
             transform = get_transform_base(
                 mode, use_tuple=True,
                 auto_augment=True, crop_shape = 224,
-                norm_par={'mean': [0.485, 0.456, 0.406],'std': [0.229, 0.224, 0.225]})
+                norm_par=None)
         elif transform == 'mixmatch':
             transform = get_transform_base(
                 mode, use_tuple=True,
                 auto_augment=False, crop_shape = 100,
-                norm_par={'mean': [0.485, 0.456, 0.406],'std': [0.229, 0.224, 0.225]})
+                norm_par=None)
             transform = TransformTwice(transform)
         else:
             transform_list=[]
@@ -114,7 +114,7 @@ class RAFDB(datasets.ImageFolder):
         hapi.config.data_dir = hapi_data_dir
         self.api = api
 
-
+        self.norm_par = {'mean': [0.485, 0.456, 0.406],'std': [0.229, 0.224, 0.225]}
         dic = hapi_info 
 
         dic_split = dic.split('/')
@@ -219,70 +219,4 @@ class RAFDB(datasets.ImageFolder):
 
         
         return sample, target, soft_label, hapi_label
-    
-# class RAF(ImageFolder):
-#     name = 'RAFDB'
-#     num_classes = 7
-#     data_shape = [3,100,100]
-#     @classmethod
-#     def add_argument(cls, group: argparse._ArgumentGroup):
-#         r"""Add image dataset arguments to argument parser group.
-#         View source to see specific arguments.
-
-#         Note:
-#             This is the implementation of adding arguments.
-#             The concrete dataset class may override this method to add more arguments.
-#             For users, please use :func:`add_argument()` instead, which is more user-friendly.
-
-#         See Also:
-#             :meth:`trojanvision.datasets.ImageSet.add_argument()`
-#         """
-#         super().add_argument(group)
-#         group.add_argument('--hapi_data_dir', 
-#                            help='hapi_data_dir')
-#         group.add_argument('--hapi_info', 
-#                            help='hapi_info')
-#         group.add_argument('--api', 
-#                            help='hapi_info')
-#         return group
-    
-#     def __init__(self, hapi_data_dir:str = None, hapi_info:str = None, norm_par: dict[str, list[float]] = {'mean': [0.485, 0.456, 0.406],
-#                                                            'std': [0.229, 0.224, 0.225]}, api=None, **kwargs):
-#         self.hapi_data_dir = hapi_data_dir
-#         self.hapi_info = hapi_info
-#         self.api=api
-#         super().__init__(norm_par=norm_par, **kwargs)
-
-#     def _get_org_dataset(self, mode: str, data_format: str = None,
-#                          **kwargs) -> datasets.DatasetFolder:
-#         data_format = data_format or self.data_format
-#         root = os.path.join(self.folder_path, mode)
-#         DatasetClass = _RAF
-#         if data_format == 'zip':
-#             root = os.path.join(self.folder_path,
-#                                 f'{self.name}_{mode}_store.zip')
-#             DatasetClass = ZipFolder
-#             if 'memory' not in kwargs.keys():
-#                 kwargs['memory'] = self.memory
-#         return DatasetClass(root=root, hapi_data_dir=self.hapi_data_dir, hapi_info=self.hapi_info, mode=mode,api=self.api, **kwargs)
-    
-#     def get_data(self, data: tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor],
-#                 **kwargs) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
-#         r"""Process image data.
-#         Defaults to put input and label on ``env['device']`` with ``non_blocking``
-#         and transform label to ``torch.LongTensor``.
-
-#         Args:
-#             data (tuple[torch.Tensor, torch.Tensor]): Tuple of batched input and label.
-#             **kwargs: Any keyword argument (unused).
-
-#         Returns:
-#             (tuple[torch.Tensor, torch.Tensor]):
-#                 Tuple of batched input and label on ``env['device']``.
-#                 Label is transformed to ``torch.LongTensor``.
-#         """
-
-#         return (data[0].to(env['device'], non_blocking=True),
-#             data[1].to(env['device'], dtype=torch.long, non_blocking=True),
-#             data[2].to(env['device'], non_blocking=True),
-#             data[3].to(env['device'], dtype=torch.long, non_blocking=True))
+  

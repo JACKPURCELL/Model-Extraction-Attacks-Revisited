@@ -1,4 +1,4 @@
-0.16%# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 import argparse
 import json
 import os
@@ -54,7 +54,6 @@ class TransformTwice:
         return out1, out2
        
 class KDEF(datasets.ImageFolder):
-    
     def __init__(self, input_directory=None, hapi_data_dir:str = None, hapi_info:str = None, api=None,transform='Normal'):
 #         0.5084671 0.3032051 0.2204921
 # 0.2170966 0.16445793 0.12108668
@@ -80,7 +79,7 @@ class KDEF(datasets.ImageFolder):
             transform = TransformTwice(transform)
             
         super().__init__(root=input_directory,transform=transform)
-
+        self.norm_par = {'mean': [0.509, 0.303, 0.221],'std': [0.217, 0.164, 0.121]}
         self.api = api
 
 

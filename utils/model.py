@@ -694,19 +694,27 @@ def distillation(module: nn.Module, pgd_set,num_classes: int,
                 raise NotImplementedError(f'{adv_train=} is not supported yet.')
             
             adv_x,_adv_soft_label,_adv_hapi_label,new_indices = get_api(selected_data,adv_x,indices,api)
-            adv_x = adv_x.cuda()
-            _adv_soft_label= _adv_soft_label.cuda()
-            new_indices = new_indices.cuda()
-            
-            _input[new_indices] = adv_x
-            ori_soft_label = _soft_label[new_indices]
-            _soft_label[new_indices] = _adv_soft_label
-            
-            
-            adv_output = forward_fn(_input)
-            
-            attack_succ = (1-float(torch.sum(torch.eq(torch.argmax(adv_output[new_indices],dim=-1),torch.argmax(_output[new_indices],dim=-1)).to(torch.int)).item() / len(ori_soft_label) ))* 100
-            ahapi_succ = (1-float(torch.sum(torch.eq(torch.argmax(ori_soft_label,dim=-1),torch.argmax(_adv_soft_label,dim=-1)).to(torch.int)).item() / len(ori_soft_label) ))* 100
+            replace = False
+            if replace:#replace
+                adv_x = adv_x.cuda()
+                _adv_soft_label= _adv_soft_label.cuda()
+                new_indices = new_indices.cuda()
+                
+                _input[new_indices] = adv_x
+                ori_soft_label = _soft_label[new_indices]
+                _soft_label[new_indices] = _adv_soft_label
+                adv_output = forward_fn(_input)
+                attack_succ = (1-float(torch.sum(torch.eq(torch.argmax(adv_output[new_indices],dim=-1),torch.argmax(_output[new_indices],dim=-1)).to(torch.int)).item() / len(ori_soft_label) ))* 100
+                ahapi_succ = (1-float(torch.sum(torch.eq(torch.argmax(ori_soft_label,dim=-1),torch.argmax(_adv_soft_label,dim=-1)).to(torch.int)).item() / len(ori_soft_label) ))* 100
+            else:#cat
+                adv_x = adv_x.cuda()
+                _adv_soft_label= _adv_soft_label.cuda()
+                _input = torch.cat([_input,adv_x],dim=0)
+                ori_soft_label = _soft_label[new_indices]
+                _soft_label = torch.cat([_soft_label,_adv_soft_label],dim=0)
+                adv_output = forward_fn(_input)
+                attack_succ = (1-float(torch.sum(torch.eq(torch.argmax(adv_output[num_samples:],dim=-1),torch.argmax(_output[new_indices],dim=-1)).to(torch.int)).item() / len(ori_soft_label) ))* 100
+                ahapi_succ = (1-float(torch.sum(torch.eq(torch.argmax(ori_soft_label,dim=-1),torch.argmax(_adv_soft_label,dim=-1)).to(torch.int)).item() / len(ori_soft_label) ))* 100
             
             loss = loss_fn(_output=adv_output, _soft_label=_soft_label)
             
@@ -906,6 +914,42 @@ def distillation(module: nn.Module, pgd_set,num_classes: int,
                         loss = loss_fn( _label=_label, _output=_output)
                     else:
                         loss = loss_fn( _soft_label=_soft_label, _output=_output)
+                case 'cifar10':
+                    _input, _label  = data
+                    _input = _input.cuda()
+                    _label = _label.cuda()
+                    hapi_label=_label
+                    _output = forward_fn(_input)
+                    if adv_train:
+                        optimizer.zero_grad()
+                        loss, adv_x, _adv_soft_label, _adv_hapi_label,attack_succ,ahapi_succ = after_loss_fn(_input=_input,_label=_label,_soft_label=_soft_label,_output=_output,optimizer=optimizer)
+                        if grad_clip is not None:
+                            nn.utils.clip_grad_norm_(params, grad_clip)
+                        optimizer.step()
+                        
+                        logger.update(n=_adv_soft_label.shape[0],attack_succ=attack_succ,ahapi_succ=ahapi_succ)
+                        
+                        # if i == 0 and _epoch == 1:
+                        #     adv_x_list = []
+                        #     adv_soft_label_list =[]
+                            
+                        # if len(adv_x_list) != 0:
+                        #     # print(len(adv_x_list))
+                        #     for adv_x_inlist, adv_soft_label_inlist in zip(adv_x_list, adv_soft_label_list):
+                        #         optimizer.zero_grad()
+                        #         loss = loss_fn( _soft_label=adv_soft_label_inlist, _output=forward_fn(adv_x_inlist))
+                        #         loss.backward()
+                        #         if grad_clip is not None:
+                        #             nn.utils.clip_grad_norm_(params, grad_clip)
+                        #         optimizer.step()
+                                
+                        # adv_x_list.append(adv_x)
+                        # adv_soft_label_list.append(_adv_soft_label)
+                        
+                    elif label_train:
+                        loss = loss_fn( _label=_label, _output=_output)
+                    else:
+                        loss = loss_fn( _soft_label=_soft_label, _output=_output)
                     
             if backward_and_step and adv_train == None:
                 optimizer.zero_grad()
@@ -932,6 +976,9 @@ def distillation(module: nn.Module, pgd_set,num_classes: int,
                         new_num_classes = 2
                     case 'emotion':
                         new_num_classes = num_classes
+                    case 'cifar10':
+                        new_num_classes = num_classes
+                        
                 hapi_acc1, hapi_acc5 = accuracy_fn(
                     _output, hapi_label, num_classes=new_num_classes, topk=(1, 5))
                 gt_acc1, gt_acc5 = accuracy_fn(
@@ -1200,7 +1247,14 @@ def dis_validate(module: nn.Module, num_classes: int,
                         _output = forward_fn(input_ids=input_ids,attention_mask=attention_mask)
                         if adv_valid:
                             raise NotImplementedError(f'{adv_valid=} is not supported on sentiment yet.')
-            
+                    case 'cifar10':
+                        _input, _label  = data
+                        _input = _input.cuda()
+                        _label = _label.cuda()
+                        hapi_label=_label
+                        _output = forward_fn(_input)
+
+                        
                 gt_loss = float(loss_fn( _label=_label, _output=_output, **kwargs))
                 if label_train:
                     hapi_loss = float(loss_fn( _label=hapi_label, _output=_output,  **kwargs))
@@ -1215,6 +1269,8 @@ def dis_validate(module: nn.Module, num_classes: int,
                         _output = _output[:,:2]
                         new_num_classes = 2
                     case 'emotion':
+                        new_num_classes = num_classes
+                    case 'cifar10':
                         new_num_classes = num_classes
                 hapi_acc1, hapi_acc5 = accuracy_fn(
                         _output, hapi_label, num_classes=new_num_classes, topk=(1, 5))

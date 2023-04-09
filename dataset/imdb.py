@@ -62,7 +62,7 @@ class IMDB(Dataset):
         self.api = api
         self.max_length = max_length
 
-        
+        self.norm_par=None
         dic = hapi_info 
         print("hapi_info: ",hapi_info)
         dic_split = dic.split('/')

@@ -25,13 +25,11 @@ from optimizer.lion import Lion
 
 class ROBERTA(nn.Module):
 
-    def __init__(self, model_name: str = 'roberta-large', num_classes=2, parallel = True,**kwargs):
+    def __init__(self, model_name: str = 'roberta-large', num_classes=2, **kwargs):
         super(ROBERTA, self).__init__()
 
-        if parallel:
-            self.model = nn.DataParallel(RobertaModel.from_pretrained(model_name,num_labels=num_classes)).cuda()
-        else:
-            self.model = RobertaModel.from_pretrained(model_name,num_labels=num_classes).cuda()
+
+        self.model = RobertaModel.from_pretrained(model_name,num_labels=num_classes).cuda()
         
         self.tokenizer = RobertaTokenizer.from_pretrained(model_name)
         module_list: list[nn.Module] = []

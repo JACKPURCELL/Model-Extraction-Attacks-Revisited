@@ -59,7 +59,7 @@ def get_transform_cifar(mode: str, auto_augment: bool = False,
         transform.append(Cutout(cutout_length))
         
     if norm_par is not None:
-                transform.transforms.append(transforms.Normalize(
+                transform.append(transforms.Normalize(
                 mean=norm_par['mean'], std=norm_par['std']))
     return transforms.Compose(transform)
 
@@ -98,9 +98,10 @@ class CIFAR10(datasets.CIFAR10):
         transform = get_transform_cifar(
                 mode, auto_augment=True,
                 cutout=False, cutout_length=None,
-                data_shape=self.data_shape,norm_par={'mean': [0.49139968, 0.48215827, 0.44653124],
-                                                           'std': [0.24703233, 0.24348505, 0.26158768] })
+                data_shape=self.data_shape,norm_par=None)
         
+        self.norm_par = {'mean': [0.49139968, 0.48215827, 0.44653124],
+                         'std': [0.24703233, 0.24348505, 0.26158768] }
         
         super().__init__(root='/data/jc/data/image/cifar10',train=(mode == 'train'),transform=transform,download=True)
 

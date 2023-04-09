@@ -12,24 +12,26 @@ from typing import Generator, Iterator, Mapping
 from collections.abc import Iterable
 from adversirial.pgd import PGD
 from optimizer.lion import Lion
+from torchvision import transforms
 
 class VGG(nn.Module):
 
-    def __init__(self, model_name: str = 'vgg19_bn',num_classes=7,parallel=True):
+    def __init__(self, norm_par=None,model_name: str = 'vgg19_bn',num_classes=7):
 
         super(VGG, self).__init__() 
         ModelClass = getattr(torchvision.models, model_name)
-        if parallel:
-            self.model = nn.DataParallel(ModelClass(weights='DEFAULT')).cuda()
-        else:
-            self.model = ModelClass(weights='DEFAULT').cuda()
-            
+        self.model = ModelClass(weights='DEFAULT').cuda()
+        if norm_par is not None:
+            self.norm_par = norm_par
+            self.transform = transforms.Normalize( mean=norm_par['mean'], std= norm_par['std'])       
         self.model.classifier[6] = nn.Linear(in_features=4096, out_features=num_classes,bias=True).cuda()
 
 
 
     def forward(self, x):
-        return self.model(x)
+        if self.norm_par is None:
+            return self.model(x)
+        return self.model(self.transform(x))
     
     def define_optimizer(
         self, parameters: str | Iterator[nn.Parameter] = 'full',

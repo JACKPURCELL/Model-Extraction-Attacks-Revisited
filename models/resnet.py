@@ -38,20 +38,21 @@ from torchvision import transforms
         #                    help='sgm gamma (default: 1.0)')
 class ResNet(nn.Module):
 
-    def __init__(self, model_name: str = 'resnet50',num_classes=7,parallel=True):
+    def __init__(self, norm_par=None,model_name: str = 'resnet50',num_classes=7):
 
         super(ResNet, self).__init__() 
         ModelClass = getattr(torchvision.models, model_name)
-        if parallel:
-            self.model = nn.DataParallel(ModelClass(weights='DEFAULT')).cuda()
-        else:
-            self.model = ModelClass(weights='DEFAULT').cuda()
-        self.transform = transforms.Normalize( mean=[0.509, 0.303, 0.221], std= [0.217, 0.164, 0.121])   
+        self.model = ModelClass(weights='DEFAULT').cuda()
+        if norm_par is not None:
+            self.norm_par = norm_par
+            self.transform = transforms.Normalize( mean=norm_par['mean'], std= norm_par['std'])   
         self.model.fc = nn.Linear(in_features=2048, out_features=num_classes,bias=True).cuda()
 
 
 
     def forward(self, x):
+        if self.norm_par is None:
+            return self.model(x)
         return self.model(self.transform(x))
     
     def define_optimizer(
