@@ -519,7 +519,7 @@ from torchvision.utils import save_image
 #     return tensor.cuda()
 
 
-def get_api(_input,x,indices,api='amazon'):
+def get_api(_input,x,indices,api='amazon',tea_model=None):
     adv_x_num = 400
 
     # define a transform to convert a tensor to PIL image
@@ -532,11 +532,17 @@ def get_api(_input,x,indices,api='amazon'):
     adv_x_batch = torch.zeros_like(x)
     new_indices = torch.zeros((x.shape[0]),dtype=torch.long)
     noface_num = 0
+    if tea_model is not None:
+        m = nn.Softmax(dim=1)
+        with torch.no_grad():
+            soft_label_batch=m(tea_model(x))
+        hapi_label_batch = torch.argmax(soft_label_batch,dim=-1)
+        adv_x_batch=x
+        new_indices=indices
+        return adv_x_batch,soft_label_batch,hapi_label_batch,new_indices
     for i in range(x.shape[0]):
         # img:Image = transform(x[i,:,:,:])
         # img_input:Image = transform(_input[i,:,:,:])
-
-                    
         path = os.path.join('/data/jc/data/image/adv_x', str(adv_x_num)+'.png')
         path_input = os.path.join('/data/jc/data/image/adv_x', str(adv_x_num)+'_input.png')
         save_image(x[i,:,:,:],path,'png')
@@ -656,7 +662,7 @@ def distillation(module: nn.Module, pgd_set,num_classes: int,
           hapi_data_dir=None,hapi_info=None,
         batch_size=None,num_workers=None,
         n_samples = None,adaptive=False,get_sampler_fn=None,
-        balance=False,sample_times = 10,
+        balance=False,sample_times = 10,tea_model=None,
           
           
           
@@ -668,16 +674,16 @@ def distillation(module: nn.Module, pgd_set,num_classes: int,
     forward_fn =  module.__call__
     if adv_train is not None or adv_valid:
         if adv_train == 'pgd':
-            pgd = PGD(module, eps=4/255,alpha=2/255, steps=20, random_start=True)
+            pgd = PGD(module, eps=8/255,alpha=2/255, steps=20, random_start=True)
         elif adv_train == 'cw':
             cw = CW(module, c=1, kappa=0, steps=50, lr=0.01)
         else:
             raise NotImplementedError(f'{adv_train=} is not supported yet.')
         
-        def after_loss_fn(_input: torch.Tensor,  _label,_soft_label: torch.Tensor=None, _output:torch.Tensor=None, optimizer: Optimizer=None,  mode='train',**kwargs):
+        def after_loss_fn(_input: torch.Tensor,  _label,_soft_label: torch.Tensor=None, _output:torch.Tensor=None, optimizer: Optimizer=None,  mode='train',tea_model=None,**kwargs):
 
             num_samples = _input.shape[0]
-            num_to_select = int(0.1 * num_samples)
+            num_to_select = int(0.5 * num_samples)
             indices = torch.randperm(num_samples)[:num_to_select]
             selected_data = _input[indices]
             selected_label = _label[indices]
@@ -693,7 +699,7 @@ def distillation(module: nn.Module, pgd_set,num_classes: int,
             else:
                 raise NotImplementedError(f'{adv_train=} is not supported yet.')
             
-            adv_x,_adv_soft_label,_adv_hapi_label,new_indices = get_api(selected_data,adv_x,indices,api)
+            adv_x,_adv_soft_label,_adv_hapi_label,new_indices = get_api(selected_data,adv_x,indices,api,tea_model)
             replace = False
             if replace:#replace
                 adv_x = adv_x.cuda()
@@ -860,15 +866,22 @@ def distillation(module: nn.Module, pgd_set,num_classes: int,
         
                     else:
                         _input, _label, _soft_label, hapi_label  = data
+                        
                         _input = _input.cuda()
+                        if tea_model is not None:
+                            m = nn.Softmax(dim=1)
+                            with torch.no_grad():
+                                _soft_label=m(tea_model(_input))
+                            hapi_label = torch.argmax(_soft_label, dim=-1)
                         _soft_label = _soft_label.cuda()
                         _label = _label.cuda()
                         hapi_label = hapi_label.cuda()
 
                         _output = forward_fn(_input)
-                        if adv_train:
+
+                        if adv_train and _epoch >7:
                             optimizer.zero_grad()
-                            loss, adv_x, _adv_soft_label, _adv_hapi_label,attack_succ,ahapi_succ = after_loss_fn(_input=_input,_label=_label,_soft_label=_soft_label,_output=_output,optimizer=optimizer)
+                            loss, adv_x, _adv_soft_label, _adv_hapi_label,attack_succ,ahapi_succ = after_loss_fn(_input=_input,_label=_label,_soft_label=_soft_label,_output=_output,optimizer=optimizer,tea_model=tea_model)
                             if grad_clip is not None:
                                 nn.utils.clip_grad_norm_(params, grad_clip)
                             optimizer.step()
@@ -919,10 +932,17 @@ def distillation(module: nn.Module, pgd_set,num_classes: int,
                     _input = _input.cuda()
                     _label = _label.cuda()
                     hapi_label=_label
+                                                               
+                    if tea_model is not None:
+                        m = nn.Softmax(dim=1)
+                        with torch.no_grad():
+                            _soft_label=m(tea_model(_input))
+                        hapi_label = torch.argmax(_soft_label, dim=-1)
                     _output = forward_fn(_input)
-                    if adv_train:
+
+                    if adv_train and _epoch >7:
                         optimizer.zero_grad()
-                        loss, adv_x, _adv_soft_label, _adv_hapi_label,attack_succ,ahapi_succ = after_loss_fn(_input=_input,_label=_label,_soft_label=_soft_label,_output=_output,optimizer=optimizer)
+                        loss, adv_x, _adv_soft_label, _adv_hapi_label,attack_succ,ahapi_succ = after_loss_fn(_input=_input,_label=_label,_soft_label=_soft_label,_output=_output,optimizer=optimizer,tea_model=tea_model)
                         if grad_clip is not None:
                             nn.utils.clip_grad_norm_(params, grad_clip)
                         optimizer.step()
@@ -951,7 +971,7 @@ def distillation(module: nn.Module, pgd_set,num_classes: int,
                     else:
                         loss = loss_fn( _soft_label=_soft_label, _output=_output)
                     
-            if backward_and_step and adv_train == None:
+            if backward_and_step and (adv_train == None or _epoch<8):
                 optimizer.zero_grad()
                 loss.backward()
                 # if adv_train:
@@ -1094,7 +1114,7 @@ def distillation(module: nn.Module, pgd_set,num_classes: int,
                                           _epoch=_epoch + start_epoch,
                                           verbose=verbose, indent=indent,
                                           label_train=label_train,
-                                          api=api,task=task,after_loss_fn=after_loss_fn,adv_valid=adv_valid,
+                                          api=api,task=task,after_loss_fn=after_loss_fn,adv_valid=adv_valid,tea_model=tea_model,
                                           **kwargs)
             cur_acc = validate_result[0]
             if cur_acc >= best_acc:
@@ -1120,7 +1140,7 @@ def dis_validate(module: nn.Module, num_classes: int,
              verbose: bool = True,
              writer=None, main_tag: str = 'valid',
              tag: str = '', _epoch: int = None,
-             label_train = False, api=False,task=None,after_loss_fn=None,adv_valid=False,
+             label_train = False, api=False,task=None,after_loss_fn=None,adv_valid=False,tea_model=None,
              **kwargs) -> tuple[float, float]:
     r"""Evaluate the model.
 
@@ -1163,6 +1183,11 @@ def dis_validate(module: nn.Module, num_classes: int,
 
                     _input, _label, _soft_label, hapi_label  = data
                     _input = _input.cuda()
+                    if tea_model is not None:
+                        m = nn.Softmax(dim=1)
+                        with torch.no_grad():
+                            _soft_label=m(tea_model(_input))
+                        hapi_label = torch.argmax(_soft_label, dim=-1)
                     _soft_label = _soft_label.cuda()
                     _label = _label.cuda()
                     hapi_label = hapi_label.cuda()
@@ -1226,6 +1251,11 @@ def dis_validate(module: nn.Module, num_classes: int,
 
                         _input, _label, _soft_label, hapi_label  = data
                         _input = _input.cuda()
+                        if tea_model is not None:
+                            m = nn.Softmax(dim=1)
+                            with torch.no_grad():
+                                _soft_label=m(tea_model(_input))
+                            hapi_label = torch.argmax(_soft_label, dim=-1)
                         _soft_label = _soft_label.cuda()
                         _label = _label.cuda()
                         hapi_label = hapi_label.cuda()
@@ -1252,6 +1282,11 @@ def dis_validate(module: nn.Module, num_classes: int,
                         _input = _input.cuda()
                         _label = _label.cuda()
                         hapi_label=_label
+                        if tea_model is not None:
+                            m = nn.Softmax(dim=1)
+                            with torch.no_grad():
+                                _soft_label=m(tea_model(_input))
+                            hapi_label = torch.argmax(_soft_label, dim=-1)
                         _output = forward_fn(_input)
 
                         

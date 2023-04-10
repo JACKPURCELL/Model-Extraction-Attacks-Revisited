@@ -44,15 +44,15 @@ class XLNet(nn.Module):
         
     def define_optimizer(
             self, parameters: str | Iterator[nn.Parameter] = 'partial',
-            OptimType: str | type[Optimizer] = 'Adam',
-            lr: float = 0.1, custom_lr: float = 1e-3, momentum: float = 0.0, weight_decay: float = 0.0,
+            OptimType: str | type[Optimizer] = 'Lion',
+            lr: float = 3e-6, custom_lr: float = 1e-3, momentum: float = 0.0, weight_decay: float = 0.0,
             lr_scheduler: bool = False,
             lr_scheduler_type: str = 'CosineAnnealingLR',
             lr_step_size: int = 30, lr_gamma: float = 0.1,
             epochs: int = None, lr_min: float = 0.0,
             lr_warmup_percent: float = 0.0, lr_warmup_method: str = 'constant',
             lr_warmup_decay: float = 0.01,
-            betas = (0.9, 0.999),
+            betas = (0.95, 0.98),
             eps = 1e-8,
             **kwargs) -> tuple[Optimizer, _LRScheduler]:
         r"""Define optimizer and lr_scheduler.

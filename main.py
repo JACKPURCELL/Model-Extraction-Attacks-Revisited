@@ -49,8 +49,9 @@ parser.add_argument('--num_workers', type=int, default=8)
 parser.add_argument('--lr', type=float)
 parser.add_argument('--lr_warmup_percent', type=float, default=0.0)
 parser.add_argument('--custom_lr', type=float, default=1e-3)
+# parser.add_argument('--betas', type=tuple, default=(0.9, 0.99))
 parser.add_argument('--betas', type=tuple, default=(0.9, 0.999))
-parser.add_argument('--weight_decay', type=float, default=0.0)
+parser.add_argument('--weight_decay', type=float, default=1.0)
 parser.add_argument('--grad_clip', type=float)
 parser.add_argument('--eps', type=float, default=1e-8)
 parser.add_argument('--hapi_info', type=str, default='sa/imdb/amazon_sa/22-05-23')
@@ -59,7 +60,7 @@ parser.add_argument('--dataset_path', type=str, default='/data/jc/data/sentiment
 parser.add_argument('--model', type=str, default='xlnet-base-cased')
 parser.add_argument('--dataset', type=str, default='imdb')
 parser.add_argument('--log_dir', action='store_true')
-parser.add_argument('--optimizer', type=str, default='Adam')
+parser.add_argument('--optimizer', type=str, default='Lion')
 parser.add_argument('--mixmatch', action='store_true')
 parser.add_argument('--seed', type=int, default=42)
 parser.add_argument('--op_parameters', type=str, default='partial')
@@ -124,15 +125,18 @@ elif args.dataset == 'cifar10':
 print(args.model.split('-')[0])
 
 if 'resnet' in args.model:
-    model = getattr(models,'resnet')(norm_par=train_dataset.norm_par,parallel=parallel,model_name=args.model,num_classes=args.num_classes)
+    model = getattr(models,'resnet')(norm_par=train_dataset.norm_par,model_name=args.model,num_classes=args.num_classes)
 elif 'xlnet' in args.model:
-    model = getattr(models,'xlnet')(parallel=parallel,model_name=args.model,num_classes=args.num_classes)
+    model = getattr(models,'xlnet')(model_name=args.model,num_classes=args.num_classes)
 elif 'vit' in args.model:
-    model = getattr(models,'vit')(norm_par=train_dataset.norm_par,parallel=parallel,model_name=args.model,num_classes=args.num_classes)
+    model = getattr(models,'vit')(norm_par=train_dataset.norm_par,model_name=args.model,num_classes=args.num_classes)
 elif 'roberta' in args.model:
-    model = getattr(models,'roberta')(parallel=parallel,model_name=args.model,num_classes=args.num_classes)
+    model = getattr(models,'roberta')(model_name=args.model,num_classes=args.num_classes)
 elif 'vgg' in args.model:
-    model = getattr(models,'vgg')(norm_par=train_dataset.norm_par,parallel=parallel,model_name=args.model,num_classes=args.num_classes)
+    model = getattr(models,'vgg')(norm_par=train_dataset.norm_par,model_name=args.model,num_classes=args.num_classes)
+    
+tea_model =  getattr(models,'resnet')(norm_par=train_dataset.norm_par,model_name='resnet50',num_classes=args.num_classes)    
+tea_model.load_state_dict(torch.load('/home/jkl6486/hermes/runs/cifar10gt/model.pth'))
 
 if parallel:
     model = nn.DataParallel(model).cuda()    
@@ -248,7 +252,7 @@ optimizer, lr_scheduler = model.define_optimizer(
 
  
 if args.log_dir:
-    log_dir = 'runs/'+"ep"+str(args.epochs)+"_num_classes_"+str(args.num_classes)+"_lr"+str(args.lr)+"_bs"+str(args.batch_size)+"_"+args.optimizer+"_"+args.op_parameters+"_"+args.model+"_percent_"+str(args.split_label_percent)
+    log_dir = 'runs/'+"ep"+str(args.epochs)+"_nc_"+str(args.num_classes)+"_lr"+str(args.lr)+"_bs"+str(args.batch_size)+"_"+args.optimizer+"_"+args.op_parameters+"_"+args.model+"_per_"+str(args.split_label_percent)
     if args.label_train:
         log_dir += "_labeltrain"
     if args.api:
@@ -266,9 +270,7 @@ else:
     log_dir = 'runs/debug'
     
 if args.lr_scheduler:
-    log_dir += "_lr_scheduler"
-
-log_dir += "dropout"
+    log_dir += "_lrsche"
 
 try:
     os.mkdir(log_dir)
@@ -298,4 +300,4 @@ distillation(module=model,pgd_set = test_dataset,adv_train=args.adv_train,num_cl
              api=args.api,task=task,unlabel_dataset_indices=_unlabel_dataset.indices if args.adaptive else None,
              hapi_data_dir=args.hapi_data_dir,hapi_info=args.hapi_info,
              batch_size=args.batch_size,num_workers=args.num_workers,
-             n_samples = args.n_samples,adaptive=args.adaptive,get_sampler_fn=get_sampler,balance=args.balance,sample_times=args.sample_times)
+             n_samples = args.n_samples,adaptive=args.adaptive,get_sampler_fn=get_sampler,balance=args.balance,sample_times=args.sample_times,tea_model=tea_model)
