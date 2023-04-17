@@ -54,13 +54,11 @@ import hapi
 def get_transform_base(mode: str, use_tuple: bool = False,
                            auto_augment: bool = False, crop_shape = 100,norm_par=None) -> transforms.Compose:
     if mode == 'train':
-        # transform_list = [
-        #     # transforms.RandomResizedCrop((crop_shape, crop_shape) if use_tuple else crop_shape),
-        # transforms.RandomRotation(degrees=(0, 90)),
-        #     transforms.Grayscale(num_output_channels=3)
-        #     # transforms.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.4), # noqa
-        # ]
-        transform_list=[]
+        transform_list = [
+            transforms.RandomResizedCrop((crop_shape, crop_shape) if use_tuple else crop_shape),
+            transforms.RandomHorizontalFlip(),
+        ]
+        # transform_list=[]
         if auto_augment:
             transform_list.append(transforms.AutoAugment(
                 transforms.AutoAugmentPolicy.IMAGENET))
@@ -97,7 +95,7 @@ class RAFDB(datasets.ImageFolder):
         if transform == 'Normal':
             transform = get_transform_base(
                 mode, use_tuple=True,
-                auto_augment=True, crop_shape = 224,
+                auto_augment=True, crop_shape = 100,
                 norm_par=None)
         elif transform == 'mixmatch':
             transform = get_transform_base(

@@ -19,13 +19,13 @@ import hapi
 def get_transform_base(mode: str, use_tuple: bool = False,
                            auto_augment: bool = False, crop_shape = 224,norm_par=None) -> transforms.Compose:
     if mode == 'train':
-        transform_list = [
-            transforms.RandomResizedCrop((crop_shape, crop_shape) if use_tuple else crop_shape),
-            transforms.RandomHorizontalFlip(),
-        ]
+        # transform_list = [
+        #     transforms.RandomResizedCrop((crop_shape, crop_shape) if use_tuple else crop_shape),
+        #     transforms.RandomHorizontalFlip(),
+        # ]
     
       
-        # transform_list=[]
+        transform_list=[]
         if auto_augment:
             transform_list.append(transforms.AutoAugment(
                 transforms.AutoAugmentPolicy.IMAGENET))

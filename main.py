@@ -50,7 +50,7 @@ parser.add_argument('--lr', type=float)
 parser.add_argument('--lr_warmup_percent', type=float, default=0.0)
 parser.add_argument('--custom_lr', type=float, default=1e-3)
 # parser.add_argument('--betas', type=tuple, default=(0.9, 0.99))
-parser.add_argument('--betas', type=tuple, default=(0.9, 0.999))
+parser.add_argument('--betas', type=tuple, default=(0.9, 0.99))
 parser.add_argument('--weight_decay', type=float, default=1.0)
 parser.add_argument('--grad_clip', type=float)
 parser.add_argument('--eps', type=float, default=1e-8)
@@ -59,7 +59,7 @@ parser.add_argument('--hapi_data_dir', type=str, default='/home/jkl6486/HAPI')
 parser.add_argument('--dataset_path', type=str, default='/data/jc/data/sentiment/IMDB_hapi/')
 parser.add_argument('--model', type=str, default='xlnet-base-cased')
 parser.add_argument('--dataset', type=str, default='imdb')
-parser.add_argument('--log_dir', action='store_true')
+parser.add_argument('--log_dir', type=str, default=None)
 parser.add_argument('--optimizer', type=str, default='Lion')
 parser.add_argument('--mixmatch', action='store_true')
 parser.add_argument('--seed', type=int, default=42)
@@ -68,9 +68,11 @@ parser.add_argument('--lr_scheduler', action='store_true')
 parser.add_argument('--validate_interval', type=int, default=1)
 parser.add_argument('--save', action='store_true')
 parser.add_argument('--label_train', action='store_true')
+parser.add_argument('--hapi_label_train', action='store_true')
 parser.add_argument('--retokenize', action='store_true')
 parser.add_argument('--split_unlabel_percent', type=float, default=0.0)
 parser.add_argument('--split_label_percent', type=float, default=1.0)
+parser.add_argument('--pgd_percent', type=float)
 parser.add_argument('--balance', action='store_true')
 parser.add_argument('--adaptive', action='store_true')
 parser.add_argument('--n_samples', type=int)
@@ -134,10 +136,12 @@ elif 'roberta' in args.model:
     model = getattr(models,'roberta')(model_name=args.model,num_classes=args.num_classes)
 elif 'vgg' in args.model:
     model = getattr(models,'vgg')(norm_par=train_dataset.norm_par,model_name=args.model,num_classes=args.num_classes)
-    
-tea_model =  getattr(models,'resnet')(norm_par=train_dataset.norm_par,model_name='resnet50',num_classes=args.num_classes)    
-tea_model.load_state_dict(torch.load('/home/jkl6486/hermes/runs/cifar10gt/model.pth'))
 
+if args.api == 'cifar10': 
+    tea_model =  getattr(models,'resnet')(norm_par=train_dataset.norm_par,model_name='resnet50',num_classes=args.num_classes)    
+    tea_model.load_state_dict(torch.load('/home/jkl6486/hermes/runs/cifar10gt/model.pth'))
+else:
+    tea_model = None
 if parallel:
     model = nn.DataParallel(model).cuda()    
 # model.load_state_dict(torch.load('/home/jkl6486/hermes/runs/fer_rafdb_facepp_fer_22-05-23_ep50_num_classes_7_lr0.0003_bs64_Lion_full_resnet50_percent_1.0_labeltrainfacepp_lr_schedulerdropout/model.pth'))
@@ -251,7 +255,7 @@ optimizer, lr_scheduler = model.define_optimizer(
 
 
  
-if args.log_dir:
+if args.log_dir is None:
     log_dir = 'runs/'+"ep"+str(args.epochs)+"_nc_"+str(args.num_classes)+"_lr"+str(args.lr)+"_bs"+str(args.batch_size)+"_"+args.optimizer+"_"+args.op_parameters+"_"+args.model+"_per_"+str(args.split_label_percent)
     if args.label_train:
         log_dir += "_labeltrain"
@@ -265,12 +269,15 @@ if args.log_dir:
         log_dir += "adaptive"
     if args.adv_train:
         log_dir += "_advtrain"
-
+    if args.pgd_percent:
+        log_dir += str(args.pgd_percent)
+    if args.lr_scheduler:
+        log_dir += "_lrsche"
 else:
-    log_dir = 'runs/debug'
+    log_dir = 'mixmatch/'+args.log_dir
     
-if args.lr_scheduler:
-    log_dir += "_lrsche"
+
+
 
 try:
     os.mkdir(log_dir)
@@ -296,8 +303,10 @@ distillation(module=model,pgd_set = test_dataset,adv_train=args.adv_train,num_cl
              grad_clip=args.grad_clip,
              loader_train=train_loader,loader_valid=test_loader,unlabel_iterator=unlabel_iterator,
              mixmatch=args.mixmatch,
-             save=args.save,label_train=args.label_train,lr_scheduler_freq=args.lr_scheduler_freq,
+             save=args.save,label_train=args.label_train,
+             hapi_label_train=args.hapi_label_train, lr_scheduler_freq=args.lr_scheduler_freq,
              api=args.api,task=task,unlabel_dataset_indices=_unlabel_dataset.indices if args.adaptive else None,
              hapi_data_dir=args.hapi_data_dir,hapi_info=args.hapi_info,
              batch_size=args.batch_size,num_workers=args.num_workers,
-             n_samples = args.n_samples,adaptive=args.adaptive,get_sampler_fn=get_sampler,balance=args.balance,sample_times=args.sample_times,tea_model=tea_model)
+             n_samples = args.n_samples,adaptive=args.adaptive,get_sampler_fn=get_sampler,
+             balance=args.balance,sample_times=args.sample_times,tea_model=tea_model,pgd_percent=args.pgd_percent)

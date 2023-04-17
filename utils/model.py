@@ -657,13 +657,13 @@ def distillation(module: nn.Module, pgd_set,num_classes: int,
           verbose: bool = True, output_freq: str = 'iter', indent: int = 0,
           change_train_eval: bool = True, lr_scheduler_freq: str = 'epoch',
           backward_and_step: bool = True, 
-          mixmatch: bool = False,label_train: bool=False,
+          mixmatch: bool = False,label_train: bool=False,hapi_label_train: bool=False,
           api=False,task='sentiment',unlabel_dataset_indices=None,
           hapi_data_dir=None,hapi_info=None,
         batch_size=None,num_workers=None,
         n_samples = None,adaptive=False,get_sampler_fn=None,
         balance=False,sample_times = 10,tea_model=None,
-          
+          pgd_percent=None,
           
           
           **kwargs):
@@ -683,7 +683,7 @@ def distillation(module: nn.Module, pgd_set,num_classes: int,
         def after_loss_fn(_input: torch.Tensor,  _label,_soft_label: torch.Tensor=None, _output:torch.Tensor=None, optimizer: Optimizer=None,  mode='train',tea_model=None,**kwargs):
 
             num_samples = _input.shape[0]
-            num_to_select = int(0.5 * num_samples)
+            num_to_select = int(pgd_percent * num_samples)
             indices = torch.randperm(num_samples)[:num_to_select]
             selected_data = _input[indices]
             selected_label = _label[indices]
@@ -907,6 +907,8 @@ def distillation(module: nn.Module, pgd_set,num_classes: int,
                             
                         elif label_train:
                             loss = loss_fn( _label=_label, _output=_output)
+                        elif hapi_label_train:
+                            loss = loss_fn( _label=hapi_label, _output=_output)
                         else:
                             loss = loss_fn( _soft_label=_soft_label, _output=_output)
 
@@ -925,6 +927,8 @@ def distillation(module: nn.Module, pgd_set,num_classes: int,
                     
                     if label_train:
                         loss = loss_fn( _label=_label, _output=_output)
+                    elif hapi_label_train:
+                        loss = loss_fn( _label=hapi_label, _output=_output)
                     else:
                         loss = loss_fn( _soft_label=_soft_label, _output=_output)
                 case 'cifar10':
@@ -968,6 +972,8 @@ def distillation(module: nn.Module, pgd_set,num_classes: int,
                         
                     elif label_train:
                         loss = loss_fn( _label=_label, _output=_output)
+                    elif hapi_label_train:
+                        loss = loss_fn( _label=hapi_label, _output=_output)
                     else:
                         loss = loss_fn( _soft_label=_soft_label, _output=_output)
                     
@@ -1064,6 +1070,8 @@ def distillation(module: nn.Module, pgd_set,num_classes: int,
                 _output = forward_fn(_input)
                 if label_train:
                     loss = loss_fn( _label=_label, _output=_output)
+                elif hapi_label_train:
+                    loss = loss_fn( _label=hapi_label, _output=_output)
                 else:
                     loss = loss_fn( _soft_label=_soft_label, _output=_output)
                 if backward_and_step:
@@ -1114,6 +1122,7 @@ def distillation(module: nn.Module, pgd_set,num_classes: int,
                                           _epoch=_epoch + start_epoch,
                                           verbose=verbose, indent=indent,
                                           label_train=label_train,
+                                          hapi_label_train=hapi_label_train,
                                           api=api,task=task,after_loss_fn=after_loss_fn,adv_valid=adv_valid,tea_model=tea_model,
                                           **kwargs)
             cur_acc = validate_result[0]
@@ -1140,7 +1149,7 @@ def dis_validate(module: nn.Module, num_classes: int,
              verbose: bool = True,
              writer=None, main_tag: str = 'valid',
              tag: str = '', _epoch: int = None,
-             label_train = False, api=False,task=None,after_loss_fn=None,adv_valid=False,tea_model=None,
+             label_train = False, hapi_label_train=False,api=False,task=None,after_loss_fn=None,adv_valid=False,tea_model=None,
              **kwargs) -> tuple[float, float]:
     r"""Evaluate the model.
 
@@ -1218,6 +1227,8 @@ def dis_validate(module: nn.Module, num_classes: int,
             gt_loss = float(loss_fn( _label=_label, _output=_output, **kwargs))
             if label_train:
                 hapi_loss = float(loss_fn( _label=hapi_label, _output=_output,  **kwargs))
+            elif hapi_label_train:
+                hapi_loss = float(loss_fn( _label=hapi_label, _output=_output,  **kwargs))
             else:    
                 hapi_loss = float(loss_fn( _soft_label=_soft_label, _output=_output,  **kwargs))
 
@@ -1292,6 +1303,8 @@ def dis_validate(module: nn.Module, num_classes: int,
                         
                 gt_loss = float(loss_fn( _label=_label, _output=_output, **kwargs))
                 if label_train:
+                    hapi_loss = float(loss_fn( _label=hapi_label, _output=_output,  **kwargs))
+                elif hapi_label_train:
                     hapi_loss = float(loss_fn( _label=hapi_label, _output=_output,  **kwargs))
                 else:    
                     hapi_loss = float(loss_fn( _soft_label=_soft_label, _output=_output,  **kwargs))
@@ -1396,7 +1409,7 @@ def attack_validate(module: nn.Module, num_classes: int,
              verbose: bool = True,
              writer=None, main_tag: str = 'valid',
              tag: str = '', _epoch: int = None,
-             label_train = False, api=False,task=None,after_loss_fn=None,adv_valid=False,
+             label_train = False, hapi_label_train=False,api=False,task=None,after_loss_fn=None,adv_valid=False,
              **kwargs) -> tuple[float, float]:
     r"""Evaluate the model.
 
@@ -1460,6 +1473,8 @@ def attack_validate(module: nn.Module, num_classes: int,
             gt_loss = float(loss_fn( _label=_label, _output=_output, **kwargs))
             if label_train:
                 hapi_loss = float(loss_fn( _label=hapi_label, _output=_output,  **kwargs))
+            elif hapi_label_train:
+                hapi_loss = float(loss_fn( _soft_label=hapi_label, _output=_output,  **kwargs))
             else:    
                 hapi_loss = float(loss_fn( _soft_label=_soft_label, _output=_output,  **kwargs))
 
@@ -1518,6 +1533,8 @@ def attack_validate(module: nn.Module, num_classes: int,
                 gt_loss = float(loss_fn( _label=_label, _output=_output, **kwargs))
                 if label_train:
                     hapi_loss = float(loss_fn( _label=hapi_label, _output=_output,  **kwargs))
+                elif hapi_label_train:
+                    hapi_loss = float(loss_fn( _soft_label=hapi_label, _output=_output,  **kwargs))
                 else:    
                     hapi_loss = float(loss_fn( _soft_label=_soft_label, _output=_output,  **kwargs))
 

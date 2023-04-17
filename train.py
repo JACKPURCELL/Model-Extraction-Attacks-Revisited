@@ -51,6 +51,7 @@ parser.add_argument('--lr_scheduler', action='store_true')
 parser.add_argument('--validate_interval', type=int, default=1)
 parser.add_argument('--save', action='store_true')
 parser.add_argument('--label_train', action='store_true')
+parser.add_argument('--label_train', action='store_true')
 parser.add_argument('--retokenize', action='store_true')
 args = parser.parse_args()
 
