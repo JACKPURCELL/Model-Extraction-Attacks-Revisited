@@ -47,7 +47,7 @@ def split_dataset(dataset: Dataset | Subset,
         as ``env['data_seed']`` when it is ``None``.
     """
     assert (length is None) != (percent is None)  # XOR check
-    length = length if length is not None else int(len(dataset) * percent)
+    length = length 
     #TODO: if batch_size != 64
     if length % 64 != 0:
         length += 64 - (length % 64)

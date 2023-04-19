@@ -72,6 +72,10 @@ parser.add_argument('--hapi_label_train', action='store_true')
 parser.add_argument('--retokenize', action='store_true')
 parser.add_argument('--split_unlabel_percent', type=float, default=0.0)
 parser.add_argument('--split_label_percent', type=float, default=1.0)
+
+parser.add_argument('--unlabel_batch', type=int, default=-1)
+parser.add_argument('--label_batch', type=int, default=-1)
+
 parser.add_argument('--pgd_percent', type=float)
 parser.add_argument('--balance', action='store_true')
 parser.add_argument('--adaptive', action='store_true')
@@ -167,18 +171,26 @@ def get_sampler(train_dataset):
     return WeightedRandomSampler(torch.DoubleTensor(weights), int(num_samples))
 
 unlabel_dataset_indices =None
-if args.split_unlabel_percent != 0.0:#mixmatch
+if args.unlabel_batch != -1:#mixmatch
     _temp_dataset, _ = split_dataset(
         train_dataset,
-        percent=args.split_label_percent+args.split_unlabel_percent)
+        length=(args.label_batch+args.unlabel_batch)*args.batch_size)
     
     
     _label_dataset, _temp_unlabel_dataset = split_dataset(
-        _temp_dataset,
-        percent=args.split_label_percent/(args.split_label_percent+args.split_unlabel_percent))
-    
-    _unlabel_dataset = Subset(RAFDB(input_directory=os.path.join('/data/jc/data/image/RAFDB',"train"),hapi_data_dir=args.hapi_data_dir,hapi_info=args.hapi_info,api=args.api,transform = 'mixmatch'),
+        _temp_dataset,length=args.label_batch*args.batch_size)
+
+    if args.dataset == 'rafdb':
+        _unlabel_dataset = Subset(RAFDB(input_directory=os.path.join('/data/jc/data/image/RAFDB',"train"),hapi_data_dir=args.hapi_data_dir,hapi_info=args.hapi_info,api=args.api,transform = 'mixmatch'),
                                 _temp_unlabel_dataset.indices)
+    elif args.dataset == 'kdef':
+        _unlabel_dataset = Subset(KDEF(input_directory=os.path.join('/data/jc/data/image/KDEF_and_AKDEF/KDEF_spilit',"train"),hapi_data_dir=args.hapi_data_dir,hapi_info=args.hapi_info,api=args.api,transform = 'mixmatch'),
+                                _temp_unlabel_dataset.indices)
+    elif args.dataset == 'cifar10':
+        _unlabel_dataset = Subset(CIFAR10(mode='train',transform = 'mixmatch'),
+                                _temp_unlabel_dataset.indices)
+    else:
+        raise NotImplementedError
     if args.balance:
         sampler=get_sampler(_label_dataset)
         shuffle = False
@@ -195,11 +207,11 @@ if args.split_unlabel_percent != 0.0:#mixmatch
     unlabel_iterator = itertools.cycle(_unlabel_dataloader)
     
     
-elif args.split_label_percent != 1.0:#adaptive or part data
+elif args.label_batch != -1:#adaptive or part data
     
     _label_dataset, _unlabel_dataset = split_dataset(
-        train_dataset,
-        percent=args.split_label_percent)
+        train_dataset,length=args.label_batch*args.batch_size)
+
     unlabel_dataset_indices=_unlabel_dataset.indices
     if args.balance:
         sampler=get_sampler(_label_dataset)
