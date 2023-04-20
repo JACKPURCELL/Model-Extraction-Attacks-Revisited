@@ -203,6 +203,7 @@ class PGDoptimizer(optim.Optimizer):
     @staticmethod
     def whitebox_grad(f, x: torch.Tensor, forward_fn,loss_kwargs: dict[str, torch.Tensor] = {}) -> torch.Tensor:
         x.requires_grad_()
+        
         loss = f(_output=forward_fn(x), **loss_kwargs)
         grad = torch.autograd.grad(loss, x)[0]
         x.requires_grad_(False)

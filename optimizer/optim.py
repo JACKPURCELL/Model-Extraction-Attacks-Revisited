@@ -85,8 +85,8 @@ class Optimizer(ABC, Process):
         adv_input = self.preprocess_input(
             *args, adv_input=adv_input,
             org_input=org_input, **kwargs)
-        iter_list: torch.Tensor = torch.zeros(len(adv_input), dtype=torch.long)
-        current_idx = torch.arange(len(iter_list))
+        iter_list: torch.Tensor = torch.zeros(len(adv_input), dtype=torch.long).cuda()
+        current_idx = torch.arange(len(iter_list)).cuda()
         if 'start' in output:
             self.output_info(*args, org_input=org_input,
                              adv_input=adv_input,

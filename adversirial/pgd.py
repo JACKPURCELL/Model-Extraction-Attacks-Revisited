@@ -74,6 +74,7 @@ class PGD(PGDoptimizer):
         self.param_list['pgd_attack'] = ['target_class', 'target_idx', 'test_num', 'num_restart', 'require_class']
         self.forward_fn=forward_fn
         self.validset=validset
+        self.softmax = nn.Softmax(dim=1)
     
     @torch.no_grad()
     def remove_misclassify(self, data: tuple[torch.Tensor, torch.Tensor],
@@ -316,7 +317,8 @@ class PGD(PGDoptimizer):
                          stop_threshold: float = None, require_class: bool = None,
                          **kwargs) -> torch.Tensor:
         stop_threshold = stop_threshold if stop_threshold is not None else self.stop_threshold
-        require_class = require_class if require_class is not None else self.require_class
+        require_class = True
+        # require_class = require_class if require_class is not None else self.require_class
         if self.stop_threshold is None:
             return torch.zeros(len(current_idx), dtype=torch.bool)
         _confidence = self.get_target_prob(adv_input[current_idx], target[current_idx])
@@ -329,6 +331,7 @@ class PGD(PGDoptimizer):
             class_result = _class == target[current_idx]
             if untarget_condition:
                 class_result = ~class_result
+            #True mean attack successful
             result = result.bitwise_and(class_result)
         return result
 

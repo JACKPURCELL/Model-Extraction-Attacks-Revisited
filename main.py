@@ -49,9 +49,9 @@ parser.add_argument('--num_workers', type=int, default=8)
 parser.add_argument('--lr', type=float)
 parser.add_argument('--lr_warmup_percent', type=float, default=0.0)
 parser.add_argument('--custom_lr', type=float, default=1e-3)
+parser.add_argument('--betas', type=tuple)
 # parser.add_argument('--betas', type=tuple, default=(0.9, 0.99))
-parser.add_argument('--betas', type=tuple, default=(0.9, 0.99))
-parser.add_argument('--weight_decay', type=float, default=1.0)
+parser.add_argument('--weight_decay', type=float, default=0.0)
 parser.add_argument('--grad_clip', type=float)
 parser.add_argument('--eps', type=float, default=1e-8)
 parser.add_argument('--hapi_info', type=str, default='sa/imdb/amazon_sa/22-05-23')
@@ -107,7 +107,10 @@ torch.backends.cudnn.benchmark = False
 torch.backends.cudnn.deterministic = True
 
 # Define hyperparameters
-
+if args.optimizer == 'Lion':
+    args.betas = (0.9, 0.99)
+else:
+    args.betas = (0.9, 0.999)
 
 # PRETRAINED_MODEL_NAME = 'bert-base-cased'
 # NUM_PRETRAINED_BERT_LAYERS = 4

@@ -62,7 +62,7 @@
             "env":{
                 "CUDA_VISIBLE_DEVICES":"0"
             },
-            "args":["--adv_train","pgd","--lr_scheduler","--batch_size","64","--model","resnet50","--grad_clip","3.0","--lr","3e-6","--op_parameters","full","--validate_interval","1","--num_classes","10","--dataset","cifar10","--epochs","15"]
+            "args":["--pgd_percent","1.0","--adv_train","pgd","--api","cifar10","--lr_scheduler","--batch_size","64","--model","resnet50","--grad_clip","3.0","--lr","3e-4","--op_parameters","full","--validate_interval","1","--num_classes","10","--dataset","cifar10","--epochs","15"]
 
 
         },
