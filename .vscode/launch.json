@@ -67,6 +67,34 @@
 
         },
         {
+            "name": "cf10autoentrain.py",
+            "type": "python",
+            "request": "launch",
+            "program": "main.py",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "env":{
+                "CUDA_VISIBLE_DEVICES":"0"
+            },
+            "args":["--lr_scheduler","--batch_size","64","--model","autoencoder","--grad_clip","3.0","--lr","1e-3","--op_parameters","full","--validate_interval","1","--num_classes","10","--dataset","cifar10","--epochs","15","--optimizer","Adam","--encoder_train","--save"]
+
+
+        },
+        {
+            "name": "cf10autoenfintune.py",
+            "type": "python",
+            "request": "launch",
+            "program": "main.py",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "env":{
+                "CUDA_VISIBLE_DEVICES":"0"
+            },
+            "args":["--lr_scheduler","--batch_size","64","--model","resnet50","--encoder_attack","--api","cifar10","--adv_train","pgd","--pgd_percent","0.3","--grad_clip","3.0","--lr","1e-3","--op_parameters","full","--validate_interval","1","--num_classes","10","--dataset","cifar10","--epochs","15","--optimizer","Adam","--save"]
+
+
+        },
+        {
             "name": "mainresnetmixmatch.py",
             "type": "python",
             "request": "launch",

@@ -93,12 +93,15 @@ class CIFAR10(datasets.CIFAR10):
                    'dog', 'frog', 'horse', 'ship', 'truck']
 # torchvision.datasets.CIFAR10(root: str, train: bool = True, 
 #                              transform: Optional[Callable] = None, target_transform: Optional[Callable] = None, download: bool = False)
-    def __init__(self, mode, **kwargs):
-        
-        transform = get_transform_cifar(
-                mode, auto_augment=True,
-                cutout=False, cutout_length=None,
-                data_shape=self.data_shape,norm_par=None)
+    def __init__(self, mode, transform='Normal',**kwargs):
+        if transform == 'Normal':
+            transform = get_transform_cifar(
+                    mode, auto_augment=True,
+                    cutout=False, cutout_length=None,
+                    data_shape=self.data_shape,norm_par=None)
+        elif transform == 'raw':
+            transform = transforms.Compose([transforms.PILToTensor(),
+                                   transforms.ConvertImageDtype(torch.float)])
         
         self.norm_par = {'mean': [0.49139968, 0.48215827, 0.44653124],
                          'std': [0.24703233, 0.24348505, 0.26158768] }

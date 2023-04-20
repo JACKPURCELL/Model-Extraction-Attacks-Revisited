@@ -15,7 +15,7 @@ from optimizer.lion import Lion
 from torchvision import transforms
 class Autoencoder(nn.Module):
     def __init__(self, norm_par=None):
-        super(Autoencoder, self).__init__()
+        super().__init__()
         if norm_par is not None:
             self.norm_par = norm_par
             self.transform = transforms.Normalize( mean=norm_par['mean'], std= norm_par['std'])   
@@ -28,23 +28,23 @@ class Autoencoder(nn.Module):
             nn.ReLU(),
 			nn.Conv2d(24, 48, 4, stride=2, padding=1),           # [batch, 48, 4, 4]
             nn.ReLU(),
-			nn.Conv2d(48, 96, 4, stride=2, padding=1),           # [batch, 96, 2, 2]
-            nn.ReLU(),
-        )
+			# nn.Conv2d(48, 96, 4, stride=2, padding=1),           # [batch, 96, 2, 2]
+            # nn.ReLU(),
+        ).cuda()
         self.decoder = nn.Sequential(
-            nn.ConvTranspose2d(96, 48, 4, stride=2, padding=1),  # [batch, 48, 4, 4]
-            nn.ReLU(),
+            # nn.ConvTranspose2d(96, 48, 4, stride=2, padding=1),  # [batch, 48, 4, 4]
+            # nn.ReLU(),
 			nn.ConvTranspose2d(48, 24, 4, stride=2, padding=1),  # [batch, 24, 8, 8]
             nn.ReLU(),
 			nn.ConvTranspose2d(24, 12, 4, stride=2, padding=1),  # [batch, 12, 16, 16]
             nn.ReLU(),
             nn.ConvTranspose2d(12, 3, 4, stride=2, padding=1),   # [batch, 3, 32, 32]
             nn.Sigmoid(),
-        )
+        ).cuda()
 
     def forward(self, x):
-        if self.norm_par is None:
-            return self.model(x)
+        # if self.norm_par is not None:
+        #     x = self.transform(x)
         encoded = self.encoder(x)
         decoded = self.decoder(encoded)
         return encoded, decoded
@@ -132,7 +132,7 @@ class Autoencoder(nn.Module):
                 kwargs['eps'] = eps
                 keys = OptimType.__init__.__code__.co_varnames
                 kwargs = {k: v for k, v in kwargs.items() if k in keys}
-                params = self.model.parameters()
+                params = list(self.encoder.parameters())+list(self.decoder.parameters())
                 optimizer = OptimType(params, lr, **kwargs)
             case _:
                 raise ValueError        

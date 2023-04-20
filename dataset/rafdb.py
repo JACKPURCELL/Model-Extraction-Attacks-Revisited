@@ -103,6 +103,9 @@ class RAFDB(datasets.ImageFolder):
                 auto_augment=False, crop_shape = 100,
                 norm_par=None)
             transform = TransformTwice(transform)
+        elif transform == 'raw':
+            transform = transforms.Compose([transforms.PILToTensor(),
+                                   transforms.ConvertImageDtype(torch.float)])
         else:
             transform_list=[]
             transform_list.append(transforms.PILToTensor())

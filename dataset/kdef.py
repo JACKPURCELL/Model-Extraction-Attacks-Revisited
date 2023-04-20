@@ -77,7 +77,9 @@ class KDEF(datasets.ImageFolder):
                 auto_augment=True, crop_shape = 224)
             #    norm_par={'mean': [0.509, 0.303, 0.221],'std': [0.217, 0.164, 0.121]})
             transform = TransformTwice(transform)
-            
+        elif transform == 'raw':
+            transform = transforms.Compose([transforms.PILToTensor(),
+                                   transforms.ConvertImageDtype(torch.float)])    
         super().__init__(root=input_directory,transform=transform)
         self.norm_par = {'mean': [0.509, 0.303, 0.221],'std': [0.217, 0.164, 0.121]}
         self.api = api

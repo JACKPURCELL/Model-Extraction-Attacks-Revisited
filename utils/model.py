@@ -16,7 +16,7 @@ import tensorboard
 import torch.nn as nn
 import torch
 import boto3
-
+import torchvision
 
 
 client = boto3.client('rekognition')
@@ -663,7 +663,7 @@ def distillation(module: nn.Module, pgd_set,num_classes: int,
           hapi_data_dir=None,hapi_info=None,
         batch_size=None,num_workers=None,
         n_samples = None,adaptive=False,get_sampler_fn=None,
-        balance=False,sample_times = 10,tea_model=None,
+        balance=False,sample_times = 10,tea_model=None,AE=None,encoder_attack=False,
           pgd_percent=None,
           encoder_train=False,
           
@@ -689,7 +689,7 @@ def distillation(module: nn.Module, pgd_set,num_classes: int,
         else:
             raise NotImplementedError(f'{adv_train=} is not supported yet.')
         
-        def after_loss_fn(forward_fn,_input: torch.Tensor,  _label,_soft_label: torch.Tensor=None, _output:torch.Tensor=None, optimizer: Optimizer=None,  mode='train',tea_model=None,**kwargs):
+        def after_loss_fn(forward_fn,_input: torch.Tensor,  _label,ori_img=None,ori_soft=None,_soft_label: torch.Tensor=None, _output:torch.Tensor=None, optimizer: Optimizer=None,  mode='train',tea_model=None,**kwargs):
 
             num_samples = _input.shape[0]
             num_to_select = int(pgd_percent * num_samples)
@@ -737,9 +737,18 @@ def distillation(module: nn.Module, pgd_set,num_classes: int,
             else:#cat
                 adv_x = adv_x.cuda()
                 _adv_soft_label= _adv_soft_label.cuda()
-                _input = torch.cat([_input,adv_x],dim=0)
                 ori_soft_label = _soft_label[new_indices]
-                _soft_label = torch.cat([_soft_label,_adv_soft_label],dim=0)
+                if ori_img is not None:
+                    _input = torch.cat([ori_img,adv_x],dim=0)
+                    _soft_label = torch.cat([ori_soft,_adv_soft_label],dim=0)
+                    
+                else:    
+                    _input = torch.cat([_input,adv_x],dim=0)
+                    _soft_label = torch.cat([_soft_label,_adv_soft_label],dim=0)
+                    
+                
+                
+                
                 adv_output = forward_fn(_input)
                 attack_succ = (1-float(torch.sum(torch.eq(torch.argmax(adv_output[num_samples:],dim=-1),torch.argmax(_output[new_indices],dim=-1)).to(torch.int)).item() / len(ori_soft_label) ))* 100
                 ahapi_succ = (1-float(torch.sum(torch.eq(torch.argmax(ori_soft_label,dim=-1),torch.argmax(_adv_soft_label,dim=-1)).to(torch.int)).item() / len(ori_soft_label) ))* 100
@@ -783,7 +792,7 @@ def distillation(module: nn.Module, pgd_set,num_classes: int,
     total_iter = (epochs - resume) * len_loader_train
 
     logger = MetricLogger()
-    if mixmatch:
+    if mixmatch or encoder_train:
         logger.create_meters(loss=None)
     elif adv_train:
         logger.create_meters(   gt_acc1=None, 
@@ -895,7 +904,6 @@ def distillation(module: nn.Module, pgd_set,num_classes: int,
                         hapi_label = hapi_label.cuda()
 
                         encoded, _output = forward_fn(_input)
-                        
                     else:
                         _input, _label, _soft_label, hapi_label  = data
                         
@@ -973,22 +981,42 @@ def distillation(module: nn.Module, pgd_set,num_classes: int,
                         hapi_label=_label
 
                         encoded, _output = forward_fn(_input)
+                        ori_img=None
+                        ori_soft=None
+                    elif encoder_attack:
+
+                        _input, _label  = data
+                        _input = _input.cuda()
+                        ori_img=_input
+                        _label = _label.cuda()
+                        feature = AE.encoder(_input)
+                        decode_img = AE.decoder(feature)
+                        if tea_model is not None:
+                            m = nn.Softmax(dim=1)
+                        with torch.no_grad():
+                            _soft_label=m(tea_model(decode_img))
+                            ori_soft=m(tea_model(ori_img))
+                        hapi_label = torch.argmax(_soft_label, dim=-1)
+                        _output = forward_fn(decode_img)
+                        _input = decode_img
                     else:    
                         _input, _label  = data
                         _input = _input.cuda()
                         _label = _label.cuda()
                         hapi_label=_label
-                                                               
-                    if tea_model is not None:
-                        m = nn.Softmax(dim=1)
-                        with torch.no_grad():
-                            _soft_label=m(tea_model(_input))
-                        hapi_label = torch.argmax(_soft_label, dim=-1)
-                    _output = forward_fn(_input)
+                        ori_img=None
+                        ori_soft=None               
+                        if tea_model is not None:
+                            m = nn.Softmax(dim=1)
+                            with torch.no_grad():
+                                _soft_label=m(tea_model(_input))
+                            hapi_label = torch.argmax(_soft_label, dim=-1)
+                        _output = forward_fn(_input)
 
                     if adv_train and _epoch >start_pgd_epoch:
                         optimizer.zero_grad()
-                        loss, adv_x, _adv_soft_label, _adv_hapi_label,attack_succ,ahapi_succ = after_loss_fn(forward_fn,_input=_input,_label=_label,_soft_label=_soft_label,_output=_output,optimizer=optimizer,tea_model=tea_model)
+                        loss, adv_x, _adv_soft_label, _adv_hapi_label,attack_succ,ahapi_succ = after_loss_fn(forward_fn,_input=_input,ori_img=ori_img,ori_soft=ori_soft,
+                                                                                                             _label=_label,_soft_label=_soft_label,_output=_output,optimizer=optimizer,tea_model=tea_model)
                         if grad_clip is not None:
                             nn.utils.clip_grad_norm_(params, grad_clip)
                         optimizer.step()
@@ -1037,7 +1065,7 @@ def distillation(module: nn.Module, pgd_set,num_classes: int,
                 lr_scheduler.step()
                 
                
-            if mixmatch:
+            if mixmatch or encoder_train:
                 logger.update(n=batch_size, loss=float(loss))
             else:    
                 match task:
@@ -1131,7 +1159,7 @@ def distillation(module: nn.Module, pgd_set,num_classes: int,
         if change_train_eval:
             module.eval()
         activate_params(module, [])
-        if mixmatch and encoder_train:
+        if mixmatch or encoder_train:
             loss=(logger.meters['loss'].global_avg)
             if writer is not None:
                 writer.add_scalars(main_tag='loss/' + main_tag,
@@ -1244,6 +1272,7 @@ def dis_validate(module: nn.Module, num_classes: int,
         loader_epoch = logger.log_every(loader, header=header,
                                         tqdm_header='Batch',
                                         indent=indent)
+    encoder_num = 0
     for data in loader_epoch:
         if adv_valid:
             match task:
@@ -1377,7 +1406,12 @@ def dis_validate(module: nn.Module, num_classes: int,
                 elif encoder_train:
                     criterion = nn.BCELoss()
                     loss = criterion(_output, _input)
-                    logger.update(n=batch_size,  loss=float(loss))
+                    logger.update(n=_input.size(0),  loss=float(loss))
+                    x = torchvision.utils.make_grid(torch.cat((_input,_output),dim=0))
+                    path = os.path.join('/data/jc/data/image/encodelion', str(encoder_num)+'.png')
+                    encoder_num+=1
+                    save_image(x,path,'png')
+                    
                     continue       
                 else:    
                     hapi_loss = float(loss_fn( _soft_label=_soft_label, _output=_output,  **kwargs))

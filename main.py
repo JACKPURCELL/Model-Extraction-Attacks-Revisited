@@ -87,6 +87,8 @@ parser.add_argument('--lr_scheduler_freq', type=str,default='epoch')
 parser.add_argument('--adv_train', choices=[None, 'pgd', 'free', 'cw'],
                            help='adversarial training (default: None)')
 parser.add_argument('--adv_valid', action='store_true')
+parser.add_argument('--encoder_train', action='store_true')
+parser.add_argument('--encoder_attack', action='store_true')
 
 parser.add_argument('--adv_train_iter', type=int, default=7)
 
@@ -117,18 +119,21 @@ else:
 # MAX_TOKENIZATION_LENGTH = 512
 
 
-
+if args.encoder_train:
+    transform = 'raw'
+else:
+    transform = 'Normal'
 if args.dataset == 'rafdb':
-    train_dataset = RAFDB(input_directory=os.path.join('/data/jc/data/image/RAFDB',"train"),hapi_data_dir=args.hapi_data_dir,hapi_info=args.hapi_info,api=args.api)
-    test_dataset = RAFDB(input_directory=os.path.join('/data/jc/data/image/RAFDB',"valid"),hapi_data_dir=args.hapi_data_dir,hapi_info=args.hapi_info,api=args.api)
+    train_dataset = RAFDB(input_directory=os.path.join('/data/jc/data/image/RAFDB',"train"),hapi_data_dir=args.hapi_data_dir,hapi_info=args.hapi_info,api=args.api,transform=transform)
+    test_dataset = RAFDB(input_directory=os.path.join('/data/jc/data/image/RAFDB',"valid"),hapi_data_dir=args.hapi_data_dir,hapi_info=args.hapi_info,api=args.api,transform=transform)
     task = 'emotion'
 elif args.dataset == 'kdef':
-    train_dataset = KDEF(input_directory=os.path.join('/data/jc/data/image/KDEF_and_AKDEF/KDEF_spilit',"train"),hapi_data_dir=args.hapi_data_dir,hapi_info=args.hapi_info,api=args.api)
-    test_dataset = KDEF(input_directory=os.path.join('/data/jc/data/image/KDEF_and_AKDEF/KDEF_spilit',"valid"),hapi_data_dir=args.hapi_data_dir,hapi_info=args.hapi_info,api=args.api)
+    train_dataset = KDEF(input_directory=os.path.join('/data/jc/data/image/KDEF_and_AKDEF/KDEF_spilit',"train"),hapi_data_dir=args.hapi_data_dir,hapi_info=args.hapi_info,api=args.api,transform=transform)
+    test_dataset = KDEF(input_directory=os.path.join('/data/jc/data/image/KDEF_and_AKDEF/KDEF_spilit',"valid"),hapi_data_dir=args.hapi_data_dir,hapi_info=args.hapi_info,api=args.api,transform=transform)
     task = 'emotion'
 elif args.dataset == 'cifar10':
-    train_dataset = CIFAR10(mode='train')
-    test_dataset = CIFAR10(mode='valid')
+    train_dataset = CIFAR10(mode='train',transform=transform)
+    test_dataset = CIFAR10(mode='valid',transform=transform)
     task = 'cifar10'
     
 print(args.model.split('-')[0])
@@ -143,7 +148,8 @@ elif 'roberta' in args.model:
     model = getattr(models,'roberta')(model_name=args.model,num_classes=args.num_classes)
 elif 'vgg' in args.model:
     model = getattr(models,'vgg')(norm_par=train_dataset.norm_par,model_name=args.model,num_classes=args.num_classes)
-
+elif 'autoencoder' in args.model:
+    model = getattr(models,'autoencoder')(norm_par=train_dataset.norm_par)
 if args.api == 'cifar10': 
     tea_model =  getattr(models,'resnet')(norm_par=train_dataset.norm_par,model_name='resnet50',num_classes=args.num_classes)    
     tea_model.load_state_dict(torch.load('/home/jkl6486/hermes/runs/cifar10gt/model.pth'))
@@ -243,8 +249,11 @@ else:
                     num_workers=args.num_workers,drop_last=True)
     unlabel_iterator = None
     
-            
-            
+if args.encoder_attack:
+    AE = getattr(models,'autoencoder')(norm_par=train_dataset.norm_par)            
+    AE.load_state_dict(torch.load('/home/jkl6486/hermes/runs/encoder_pretrain_Adam/model.pth'))        
+else:
+    AE = None
 # Acquire iterators through data loaders
 
 
@@ -324,4 +333,5 @@ distillation(module=model,pgd_set = test_dataset,adv_train=args.adv_train,num_cl
              hapi_data_dir=args.hapi_data_dir,hapi_info=args.hapi_info,
              batch_size=args.batch_size,num_workers=args.num_workers,
              n_samples = args.n_samples,adaptive=args.adaptive,get_sampler_fn=get_sampler,
-             balance=args.balance,sample_times=args.sample_times,tea_model=tea_model,pgd_percent=args.pgd_percent)
+             balance=args.balance,sample_times=args.sample_times,tea_model=tea_model,AE=AE,encoder_attack=args.encoder_attack,pgd_percent=args.pgd_percent,
+             encoder_train=args.encoder_train)
