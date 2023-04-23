@@ -92,6 +92,7 @@ class RAFDB(datasets.ImageFolder):
         mode = input_directory.split('/')[-1]
         if mode == 'valid':
             mode = 'test'
+
         if transform == 'Normal':
             transform = get_transform_base(
                 mode, use_tuple=True,
@@ -100,7 +101,7 @@ class RAFDB(datasets.ImageFolder):
         elif transform == 'mixmatch':
             transform = get_transform_base(
                 mode, use_tuple=True,
-                auto_augment=False, crop_shape = 100,
+                auto_augment=True, crop_shape = 100,
                 norm_par=None)
             transform = TransformTwice(transform)
         elif transform == 'raw':
