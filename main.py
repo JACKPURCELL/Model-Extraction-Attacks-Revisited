@@ -16,7 +16,8 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 
 # !pip install pytorch_transformers
-from pytorch_transformers import AdamW  # Adam's optimization w/ fixed weight decay
+from pytorch_transformers import AdamW
+from dataset.expw import EXPW  # Adam's optimization w/ fixed weight decay
 
 from dataset.imdb import IMDB
 from dataset.rafdb import RAFDB
@@ -135,6 +136,10 @@ elif args.dataset == 'cifar10':
     train_dataset = CIFAR10(mode='train',transform=transform)
     test_dataset = CIFAR10(mode='valid',transform=transform)
     task = 'cifar10'
+elif args.dataset == 'expw':
+    train_dataset = EXPW(input_directory=os.path.join('/data/jc/data/image/EXPW',"train"),hapi_data_dir=args.hapi_data_dir,hapi_info=args.hapi_info,api=args.api,transform=transform)
+    test_dataset = EXPW(input_directory=os.path.join('/data/jc/data/image/EXPW',"valid"),hapi_data_dir=args.hapi_data_dir,hapi_info=args.hapi_info,api=args.api,transform=transform)
+    task = 'emotion'
     
 print(args.model.split('-')[0])
 
@@ -197,6 +202,9 @@ if args.unlabel_batch != -1:#mixmatch
                                 _temp_unlabel_dataset.indices)
     elif args.dataset == 'cifar10':
         _unlabel_dataset = Subset(CIFAR10(mode='train',transform = 'mixmatch'),
+                                _temp_unlabel_dataset.indices)
+    elif args.dataset == 'expw':
+        _unlabel_dataset = Subset(EXPW(input_directory=os.path.join('/data/jc/data/image/EXPW',"train"),hapi_data_dir=args.hapi_data_dir,hapi_info=args.hapi_info,api=args.api,transform = 'mixmatch'),
                                 _temp_unlabel_dataset.indices)
     else:
         raise NotImplementedError
