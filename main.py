@@ -137,8 +137,8 @@ elif args.dataset == 'cifar10':
     test_dataset = CIFAR10(mode='valid',transform=transform)
     task = 'cifar10'
 elif args.dataset == 'expw':
-    train_dataset = EXPW(input_directory=os.path.join('/data/jc/data/image/EXPW',"train"),hapi_data_dir=args.hapi_data_dir,hapi_info=args.hapi_info,api=args.api,transform=transform)
-    test_dataset = EXPW(input_directory=os.path.join('/data/jc/data/image/EXPW',"valid"),hapi_data_dir=args.hapi_data_dir,hapi_info=args.hapi_info,api=args.api,transform=transform)
+    train_dataset = EXPW(input_directory=os.path.join('/data/jc/data/image/EXPW_224',"train"),hapi_data_dir=args.hapi_data_dir,hapi_info=args.hapi_info,api=args.api,transform=transform)
+    test_dataset = EXPW(input_directory=os.path.join('/data/jc/data/image/EXPW_224',"valid"),hapi_data_dir=args.hapi_data_dir,hapi_info=args.hapi_info,api=args.api,transform=transform)
     task = 'emotion'
     
 print(args.model.split('-')[0])
@@ -204,7 +204,7 @@ if args.unlabel_batch != -1:#mixmatch
         _unlabel_dataset = Subset(CIFAR10(mode='train',transform = 'mixmatch'),
                                 _temp_unlabel_dataset.indices)
     elif args.dataset == 'expw':
-        _unlabel_dataset = Subset(EXPW(input_directory=os.path.join('/data/jc/data/image/EXPW',"train"),hapi_data_dir=args.hapi_data_dir,hapi_info=args.hapi_info,api=args.api,transform = 'mixmatch'),
+        _unlabel_dataset = Subset(EXPW(input_directory=os.path.join('/data/jc/data/image/EXPW_224',"train"),hapi_data_dir=args.hapi_data_dir,hapi_info=args.hapi_info,api=args.api,transform = 'mixmatch'),
                                 _temp_unlabel_dataset.indices)
     else:
         raise NotImplementedError
