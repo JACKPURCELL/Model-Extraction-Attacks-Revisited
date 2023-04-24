@@ -303,7 +303,7 @@ def linear_rampup(iter, rampup_length):
         current = np.clip(iter / rampup_length, 0.0, 1.0)
         return float(current)
 
-def SemiLoss(outputs_x, targets_x, outputs_u, targets_u, iter):
+def SemiLoss(outputs_x, targets_x, outputs_u, targets_u, iter,total_iter):
     # Lx, Lu, w = criterion(logits_x, mixed_target[:batch_size], logits_u, mixed_target[batch_size:], epoch+batch_idx/train_iteration)
     # lx is cross entropy, lu is L2 normalization
     
@@ -311,15 +311,14 @@ def SemiLoss(outputs_x, targets_x, outputs_u, targets_u, iter):
     Lx = -torch.mean(torch.sum(F.log_softmax(outputs_x, dim=1) * targets_x, dim=1))
     Lu = torch.mean((probs_u - targets_u)**2)
     lambda_u = 100.0
-    w = lambda_u * linear_rampup(iter,16000)
+    w = lambda_u * linear_rampup(iter,total_iter)
     loss = Lx + w * Lu
-    
     return loss
 
 
 def loss_fn(_input: torch.Tensor = None, _label: torch.Tensor = None,
             _output: torch.Tensor = None, reduction: str = 'mean',_soft_label: torch.Tensor = None,
-            temp: float = 1.0, outputs_x=None, targets_x=None, outputs_u=None, targets_u=None, iter=None,
+            temp: float = 1.0, outputs_x=None, targets_x=None, outputs_u=None, targets_u=None, iter=None,total_iter=None,
             **kwargs) -> torch.Tensor:
     r"""Calculate the loss using :attr:`self.criterion`
     (:attr:`self.criterion_noreduction`).
@@ -343,7 +342,7 @@ def loss_fn(_input: torch.Tensor = None, _label: torch.Tensor = None,
             A scalar loss tensor (with shape ``(N)`` if ``reduction='none'``).
     """
     if outputs_x is not None:
-        return SemiLoss(outputs_x, targets_x, outputs_u, targets_u, iter)
+        return SemiLoss(outputs_x, targets_x, outputs_u, targets_u, iter,total_iter)
         
     if _soft_label is None:
         return val_loss(_input=_input, _label=_label, _output=_output, reduction=reduction)
@@ -882,7 +881,8 @@ def distillation(module: nn.Module, pgd_set,num_classes: int,
                         logits_x = logits[0]
                         logits_u = torch.cat(logits[1:], dim=0)
 
-                        loss = loss_fn(outputs_x = logits_x, targets_x = mixed_target[:batch_size], outputs_u = logits_u, targets_u = mixed_target[batch_size:], iter = _iter)
+                        loss = loss_fn(outputs_x = logits_x, targets_x = mixed_target[:batch_size], 
+                                       outputs_u = logits_u, targets_u = mixed_target[batch_size:], iter = _epoch,total_iter=epochs)
 
                     # elif adaptive:
                     #     _input, _label, _soft_label, hapi_label  = data
@@ -1226,6 +1226,7 @@ def distillation(module: nn.Module, pgd_set,num_classes: int,
             if verbose:
                 prints('-' * 50, indent=indent)
     module.zero_grad()
+    print('best_validate_result',best_validate_result)
     return best_validate_result
 
 
