@@ -143,6 +143,27 @@ elif args.dataset == 'expw':
     
 print(args.model.split('-')[0])
 
+if args.log_dir is None:
+    log_dir = 'runs/'+"ep"+str(args.epochs)+"_nc_"+str(args.num_classes)+"_lr"+str(args.lr)+"_bs"+str(args.batch_size)+"_"+args.optimizer+"_"+args.op_parameters+"_"+args.model+"_per_"+str(args.split_label_percent)
+    if args.label_train:
+        log_dir += "_labeltrain"
+    if args.api:
+        log_dir += args.api
+    if args.mixmatch:
+        log_dir += "_mixmatch"
+    if args.balance:
+        log_dir += "_balance"
+    if args.adaptive:
+        log_dir += "adaptive"
+    if args.adv_train:
+        log_dir += "_advtrain"
+    if args.pgd_percent:
+        log_dir += str(args.pgd_percent)
+    if args.lr_scheduler:
+        log_dir += "_lrsche"
+else:
+    log_dir = 'mixmatch/'+args.log_dir
+    
 if 'resnet' in args.model:
     model = getattr(models,'resnet')(norm_par=train_dataset.norm_par,model_name=args.model,num_classes=args.num_classes)
 elif 'xlnet' in args.model:
@@ -161,12 +182,19 @@ if args.api == 'cifar10':
 else:
     tea_model = None
 if parallel:
-    model = nn.DataParallel(model).cuda()    
+    model.model = nn.DataParallel(model.model).cuda()    
 # model.load_state_dict(torch.load('/home/jkl6486/hermes/runs/fer_rafdb_facepp_fer_22-05-23_ep50_num_classes_7_lr0.0003_bs64_Lion_full_resnet50_percent_1.0_labeltrainfacepp_lr_schedulerdropout/model.pth'))
 # Initialize train & test datasets
-if args.dataset == 'imdb':  
-    train_dataset = IMDB(input_directory=os.path.join(args.dataset_path,"aclImdb/test"),tokenizer=model.tokenizer,hapi_data_dir=args.hapi_data_dir,hapi_info=args.hapi_info,retokenize=args.retokenize,api=args.api,max_length=args.max_length)
-    test_dataset = IMDB(input_directory=os.path.join(args.dataset_path,"aclImdb/train"),tokenizer=model.tokenizer,hapi_data_dir=args.hapi_data_dir,hapi_info=args.hapi_info,retokenize=args.retokenize,api=args.api,max_length=args.max_length)
+if args.dataset == 'imdb':
+    if 'hapi' not in args.api:
+        path =  '/data/jc/data/sentiment/IMDB_api/'
+        train_dataset = IMDB(input_directory=os.path.join(path,"aclImdb/train"),tokenizer=model.tokenizer,hapi_data_dir=args.hapi_data_dir,hapi_info=args.hapi_info,retokenize=args.retokenize,api=args.api,max_length=args.max_length,log_dir=args.log_dir)
+        test_dataset = IMDB(input_directory=os.path.join(path,"aclImdb/test"),tokenizer=model.tokenizer,hapi_data_dir=args.hapi_data_dir,hapi_info=args.hapi_info,retokenize=args.retokenize,api=args.api,max_length=args.max_length,log_dir=args.log_dir)
+    else:
+        path = '/data/jc/data/sentiment/IMDB_hapi/'
+        print(path)
+        train_dataset = IMDB(input_directory=os.path.join(path,"aclImdb/test"),tokenizer=model.tokenizer,hapi_data_dir=args.hapi_data_dir,hapi_info=args.hapi_info,retokenize=args.retokenize,api=args.api,max_length=args.max_length,log_dir=args.log_dir)
+        test_dataset = IMDB(input_directory=os.path.join(path,"aclImdb/train"),tokenizer=model.tokenizer,hapi_data_dir=args.hapi_data_dir,hapi_info=args.hapi_info,retokenize=args.retokenize,api=args.api,max_length=args.max_length,log_dir=args.log_dir)
     task = 'sentiment'
 
 def get_sampler(train_dataset):
@@ -287,26 +315,7 @@ optimizer, lr_scheduler = model.define_optimizer(
 
 
  
-if args.log_dir is None:
-    log_dir = 'runs/'+"ep"+str(args.epochs)+"_nc_"+str(args.num_classes)+"_lr"+str(args.lr)+"_bs"+str(args.batch_size)+"_"+args.optimizer+"_"+args.op_parameters+"_"+args.model+"_per_"+str(args.split_label_percent)
-    if args.label_train:
-        log_dir += "_labeltrain"
-    if args.api:
-        log_dir += args.api
-    if args.mixmatch:
-        log_dir += "_mixmatch"
-    if args.balance:
-        log_dir += "_balance"
-    if args.adaptive:
-        log_dir += "adaptive"
-    if args.adv_train:
-        log_dir += "_advtrain"
-    if args.pgd_percent:
-        log_dir += str(args.pgd_percent)
-    if args.lr_scheduler:
-        log_dir += "_lrsche"
-else:
-    log_dir = 'mixmatch/'+args.log_dir
+
     
 
 

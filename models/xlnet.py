@@ -31,7 +31,7 @@ class XLNet(nn.Module):
 
         self.model = XLNetForSequenceClassification.from_pretrained(model_name, num_labels=num_classes).cuda()
 
-
+        self.model_name = 'xlnet'
         self.tokenizer = XLNetTokenizer.from_pretrained(model_name)
 
     def forward(self, input_ids,token_type_ids,attention_mask):
