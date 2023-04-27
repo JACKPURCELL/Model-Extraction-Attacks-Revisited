@@ -34,7 +34,7 @@ class IMDB(Dataset):
     @param (bool) apply_cleaning: whether or not to perform common cleaning operations on texts;
            note that enabling only makes sense if language of the task is English
     @param (int) max_tokenization_length: maximum number of positional embeddings, or the sequence
-           length of an example that will be fed to BERT model (default: 512)
+           length of an example that will be fed to BERT model (default: 512)log_dir
     @param (str) truncation_method: method that will be applied in case the text exceeds
            @max_tokenization_length; currently implemented methods include 'head-only', 'tail-only',
            and 'head+tail' (default: 'head-only')
@@ -43,7 +43,7 @@ class IMDB(Dataset):
     @param (torch.device) device: 'cpu' or 'gpu', decides where to store the data tensors
 
     """
-    def __init__(self, input_directory,hapi_data_dir, hapi_info,tokenizer,retokenize,api,max_length):
+    def __init__(self, input_directory,hapi_data_dir, hapi_info,tokenizer,retokenize,api,max_length,log_dir):
        
         hapi.config.data_dir = hapi_data_dir
         self.positive_path = os.path.join(input_directory, 'pos')
@@ -56,7 +56,7 @@ class IMDB(Dataset):
                                if os.path.isfile(os.path.join(self.negative_path, f))]
         self.num_negative_examples = len(self.negative_files)
         self.negative_label = 1
-
+        self.log_dir=log_dir
         self.tokenizer = tokenizer
         self.retokenize = retokenize
         self.api = api
@@ -86,13 +86,13 @@ class IMDB(Dataset):
         Function to tokenize & encode examples and save the tokenized versions to a separate folder.
         This way, we won't have to perform the same tokenization and encoding ops every epoch.
         """
-        if self.retokenize or not os.path.exists(os.path.join(self.positive_path, 'tokenized_and_encoded' + self.tokenizer.name_or_path)):
+        if self.retokenize or not os.path.exists(os.path.join(self.positive_path, 'tokenized_and_encoded' + self.tokenizer.name_or_path+self.log_dir)):
             if self.retokenize:
                 try:
-                    shutil.rmtree(os.path.join(self.positive_path, 'tokenized_and_encoded' + self.tokenizer.name_or_path))
+                    shutil.rmtree(os.path.join(self.positive_path, 'tokenized_and_encoded' + self.tokenizer.name_or_path+self.log_dir))
                 except:
                     print("no path")   
-            os.mkdir(os.path.join(self.positive_path, 'tokenized_and_encoded' + self.tokenizer.name_or_path))
+            os.mkdir(os.path.join(self.positive_path, 'tokenized_and_encoded' + self.tokenizer.name_or_path+self.log_dir))
 
             # Clean & tokenize positive reviews
             for i in trange(len(self.positive_files), desc='Tokenizing & Encoding Positive Reviews',
@@ -106,18 +106,18 @@ class IMDB(Dataset):
                 example = re.sub(' +', ' ', example)
                 example = self.tokenizer(example,return_tensors='pt',padding="max_length",max_length=self.max_length,truncation=True)
 
-                with open(os.path.join(self.positive_path, 'tokenized_and_encoded' + self.tokenizer.name_or_path, file), mode='wb') as f:
+                with open(os.path.join(self.positive_path, 'tokenized_and_encoded' + self.tokenizer.name_or_path+self.log_dir, file), mode='wb') as f:
                     pickle.dump(obj=example, file=f)
         else:
             logging.warning('Tokenized positive reviews directory already exists!')
 
-        if self.retokenize or not os.path.exists(os.path.join(self.negative_path, 'tokenized_and_encoded' + self.tokenizer.name_or_path)):
+        if self.retokenize or not os.path.exists(os.path.join(self.negative_path, 'tokenized_and_encoded' + self.tokenizer.name_or_path+self.log_dir)):
             if self.retokenize:
                 try:
-                    shutil.rmtree(os.path.join(self.negative_path, 'tokenized_and_encoded' + self.tokenizer.name_or_path))
+                    shutil.rmtree(os.path.join(self.negative_path, 'tokenized_and_encoded' + self.tokenizer.name_or_path+self.log_dir))
                 except:
                     print("no path")   
-            os.mkdir(os.path.join(self.negative_path, 'tokenized_and_encoded' + self.tokenizer.name_or_path))
+            os.mkdir(os.path.join(self.negative_path, 'tokenized_and_encoded' + self.tokenizer.name_or_path+self.log_dir))
 
             # Clean & tokenize negative reviews
             for i in trange(len(self.negative_files), desc='Tokenizing & Encoding Negative Reviews',
@@ -132,7 +132,7 @@ class IMDB(Dataset):
                 example = self.tokenizer(example,return_tensors='pt',padding="max_length",max_length=self.max_length,truncation=True)
 
 
-                with open(os.path.join(self.negative_path, 'tokenized_and_encoded' + self.tokenizer.name_or_path, file), mode='wb') as f:
+                with open(os.path.join(self.negative_path, 'tokenized_and_encoded' + self.tokenizer.name_or_path+self.log_dir, file), mode='wb') as f:
                     pickle.dump(obj=example, file=f)
         else:
             logging.warning('Tokenized negative reviews directory already exists!')
@@ -144,7 +144,7 @@ class IMDB(Dataset):
         if index < self.num_positive_examples:
             file = self.positive_files[index]
             label = torch.tensor(data=self.positive_label, dtype=torch.long)
-            with open(os.path.join(self.positive_path, 'tokenized_and_encoded' + self.tokenizer.name_or_path, file), mode='rb') as f:
+            with open(os.path.join(self.positive_path, 'tokenized_and_encoded' + self.tokenizer.name_or_path+self.log_dir, file), mode='rb') as f:
                 example = pickle.load(file=f)
             match self.api:
                 case 'amazon':
@@ -158,7 +158,7 @@ class IMDB(Dataset):
         elif index >= self.num_positive_examples:
             file = self.negative_files[index-self.num_positive_examples]
             label = torch.tensor(data=self.negative_label, dtype=torch.long)
-            with open(os.path.join(self.negative_path, 'tokenized_and_encoded' + self.tokenizer.name_or_path, file), mode='rb') as f:
+            with open(os.path.join(self.negative_path, 'tokenized_and_encoded' + self.tokenizer.name_or_path+self.log_dir, file), mode='rb') as f:
                 example = pickle.load(file=f)
             match self.api:
                 case 'amazon':

@@ -30,6 +30,7 @@ class ROBERTA(nn.Module):
 
 
         self.model = RobertaModel.from_pretrained(model_name,num_labels=num_classes).cuda()
+        self.model_name ='roberta'
         
         self.tokenizer = RobertaTokenizer.from_pretrained(model_name)
         module_list: list[nn.Module] = []

@@ -955,17 +955,20 @@ def distillation(module: nn.Module, pgd_set,num_classes: int,
                             loss = loss_fn( _soft_label=_soft_label, _output=_output)
 
                 case 'sentiment':
-                    # input_ids, token_type_ids, attention_mask, _label, _soft_label, hapi_label  = data
-                    input_ids, attention_mask, _label, _soft_label, hapi_label  = data
+                    if module.model_name == 'xlnet':
+                        input_ids, token_type_ids, attention_mask, _label, _soft_label, hapi_label  = data
+                        token_type_ids = token_type_ids.cuda()
+                    elif module.model_name == 'roberta':
+                        input_ids, attention_mask, _label, _soft_label, hapi_label  = data
                     input_ids = input_ids.cuda()
-                    # token_type_ids = token_type_ids.cuda()
                     attention_mask = attention_mask.cuda()
                     _label = _label.cuda()
                     _soft_label = _soft_label.cuda()
                     hapi_label = hapi_label.cuda()
-
-                    # _output = forward_fn(input_ids=input_ids,token_type_ids=token_type_ids,attention_mask=attention_mask)
-                    _output = forward_fn(input_ids=input_ids,attention_mask=attention_mask)
+                    if module.model_name == 'xlnet':
+                        _output = forward_fn(input_ids=input_ids,token_type_ids=token_type_ids,attention_mask=attention_mask)
+                    elif module.model_name == 'roberta':
+                        _output = forward_fn(input_ids=input_ids,attention_mask=attention_mask)
                     
                     if label_train:
                         loss = loss_fn( _label=_label, _output=_output)
@@ -1300,16 +1303,32 @@ def dis_validate(module: nn.Module, num_classes: int,
 
 
                 case 'sentiment':
-                    # input_ids, token_type_ids, attention_mask, _label, _soft_label, hapi_label  = data
-                    input_ids, attention_mask, _label, _soft_label, hapi_label  = data
+                    if module.model_name == 'xlnet':
+                        input_ids, token_type_ids, attention_mask, _label, _soft_label, hapi_label  = data
+                        token_type_ids = token_type_ids.cuda()
+                    elif module.model_name == 'roberta':
+                        input_ids, attention_mask, _label, _soft_label, hapi_label  = data
                     input_ids = input_ids.cuda()
-                    # token_type_ids = token_type_ids.cuda()
                     attention_mask = attention_mask.cuda()
                     _label = _label.cuda()
                     _soft_label = _soft_label.cuda()
                     hapi_label = hapi_label.cuda()
+                    if module.model_name == 'xlnet':
+                        _output = forward_fn(input_ids=input_ids,token_type_ids=token_type_ids,attention_mask=attention_mask)
+                    elif module.model_name == 'roberta':
+                        _output = forward_fn(input_ids=input_ids,attention_mask=attention_mask)
+                    
+                    
+                    # # input_ids, token_type_ids, attention_mask, _label, _soft_label, hapi_label  = data
+                    # input_ids, attention_mask, _label, _soft_label, hapi_label  = data
+                    # input_ids = input_ids.cuda()
+                    # # token_type_ids = token_type_ids.cuda()
+                    # attention_mask = attention_mask.cuda()
+                    # _label = _label.cuda()
+                    # _soft_label = _soft_label.cuda()
+                    # hapi_label = hapi_label.cuda()
 
-                    _output = forward_fn(input_ids=input_ids,attention_mask=attention_mask)
+                    # _output = forward_fn(input_ids=input_ids,attention_mask=attention_mask)
                     if adv_valid:
                         raise NotImplementedError(f'{adv_valid=} is not supported on sentiment yet.')
         
@@ -1369,16 +1388,20 @@ def dis_validate(module: nn.Module, num_classes: int,
 
 
                     case 'sentiment':
-                        # input_ids, token_type_ids, attention_mask, _label, _soft_label, hapi_label  = data
-                        input_ids, attention_mask, _label, _soft_label, hapi_label  = data
+                        if module.model_name == 'xlnet':
+                            input_ids, token_type_ids, attention_mask, _label, _soft_label, hapi_label  = data
+                            token_type_ids = token_type_ids.cuda()
+                        elif module.model_name == 'roberta':
+                            input_ids, attention_mask, _label, _soft_label, hapi_label  = data
                         input_ids = input_ids.cuda()
-                        # token_type_ids = token_type_ids.cuda()
                         attention_mask = attention_mask.cuda()
                         _label = _label.cuda()
                         _soft_label = _soft_label.cuda()
                         hapi_label = hapi_label.cuda()
-
-                        _output = forward_fn(input_ids=input_ids,attention_mask=attention_mask)
+                        if module.model_name == 'xlnet':
+                            _output = forward_fn(input_ids=input_ids,token_type_ids=token_type_ids,attention_mask=attention_mask)
+                        elif module.model_name == 'roberta':
+                            _output = forward_fn(input_ids=input_ids,attention_mask=attention_mask)
                         if adv_valid:
                             raise NotImplementedError(f'{adv_valid=} is not supported on sentiment yet.')
                     case 'cifar10':
