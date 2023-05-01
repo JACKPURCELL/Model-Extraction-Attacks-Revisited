@@ -684,7 +684,7 @@ def distillation(module: nn.Module, pgd_set,num_classes: int,
             pgd = PGD_early(module, eps=8/255,alpha=2/255, steps=20, random_start=False)
             
         elif adv_train == 'cw':
-            cw = CW(module, c=1, kappa=0, steps=50, lr=0.01)
+            cw = CW(module, c=1, kappa=0, steps=7, lr=0.01)
         else:
             raise NotImplementedError(f'{adv_train=} is not supported yet.')
         
