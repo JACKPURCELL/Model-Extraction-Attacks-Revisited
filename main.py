@@ -115,6 +115,10 @@ if args.optimizer == 'Lion':
 else:
     args.betas = (0.9, 0.999)
 
+if args.optimizer == 'Lion' and args.dataset == 'imdb':
+    args.betas = (0.95, 0.98)
+elif args.dataset == 'imdb':
+    args.betas = (0.9, 0.99)
 # PRETRAINED_MODEL_NAME = 'bert-base-cased'
 # NUM_PRETRAINED_BERT_LAYERS = 4
 # MAX_TOKENIZATION_LENGTH = 512
@@ -162,7 +166,7 @@ if args.log_dir is None:
     if args.lr_scheduler:
         log_dir += "_lrsche"
 else:
-    log_dir = 'mixmatch/'+args.log_dir
+    log_dir = 'optim/'+args.log_dir
     
 if 'resnet' in args.model:
     model = getattr(models,'resnet')(norm_par=train_dataset.norm_par,model_name=args.model,num_classes=args.num_classes)

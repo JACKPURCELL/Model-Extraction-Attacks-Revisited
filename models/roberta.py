@@ -159,8 +159,8 @@ class ROBERTA(nn.Module):
                 kwargs['eps'] = eps
                 keys = OptimType.__init__.__code__.co_varnames
                 kwargs = {k: v for k, v in kwargs.items() if k in keys}
-                params = self.model.parameters()
-                params.extend(self.classifier.parameters())
+                params = list(self.model.parameters())
+                params.extend(list(self.classifier.parameters()))
                 optimizer = OptimType(params, lr, **kwargs)
 
         _lr_scheduler: _LRScheduler = None
