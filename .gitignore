@@ -16,3 +16,5 @@ utils/module/__pycache__/process.cpython-310.pyc
 optimizer/__pycache__/lion.cpython-310.pyc
 dataset/__pycache__/imdb.cpython-310.pyc
 shell
+bresnet50_ft_weight.pkl
+resnet50_ft_weight.pkl
