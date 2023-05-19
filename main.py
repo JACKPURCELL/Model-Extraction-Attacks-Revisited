@@ -16,7 +16,7 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 
 # !pip install pytorch_transformers
-from pytorch_transformers import AdamW
+# from pytorch_transformers import AdamW
 from dataset.expw import EXPW  # Adam's optimization w/ fixed weight decay
 
 from dataset.imdb import IMDB
@@ -166,7 +166,7 @@ if args.log_dir is None:
     if args.lr_scheduler:
         log_dir += "_lrsche"
 else:
-    log_dir = 'optim/'+args.log_dir
+    log_dir = 'advpgd/'+args.log_dir
     
 if 'resnet' in args.model:
     model = getattr(models,'resnet')(norm_par=train_dataset.norm_par,model_name=args.model,num_classes=args.num_classes)

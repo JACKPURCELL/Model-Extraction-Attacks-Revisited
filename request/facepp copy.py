@@ -27,7 +27,7 @@ def detect_faces(dirpath,file):
             'api_secret':'0A_i8hjaXU4UqLbmpXKpj9qmEwzUqBn0',
             'image_base64':base64.b64encode(image.read()),
             'return_attributes':'emotion'}
-            r = requests.post(url = 'https://api-us.faceplusplus.com/facepp/v3/detect', data = data)
+            r = requests.post(url = 'https://api-cn.faceplusplus.com/facepp/v3/detect', data = data)
             responses = r.text
             responses = json.loads(responses)
             
@@ -52,31 +52,17 @@ def detect_faces(dirpath,file):
                 print('UNDETECTED')
                 data = json.dumps(data)
 
-            with open(os.path.join(dirpath, 'facepp_api', file), mode='w') as f:
-                f.write(data)
+ 
            
             
 
 
 for label in range(7):
     path = os.path.join('/data/jc/data/image/RAFDB/train', str(label))        
-    try:        
-        os.mkdir(os.path.join(path, 'facepp_api'))
-
-    except:
-        pass
+    
     files = [f for f in os.listdir(path)
                         if os.path.isfile(os.path.join(path, f))]
     for i in trange(len(files), desc='requesting facepp api', leave=True):        
         detect_faces(path,files[i])        
     
-    path = os.path.join('/data/jc/data/image/RAFDB/valid', str(label))
-    try:        
-        os.mkdir(os.path.join(path, 'facepp_api'))
-
-    except:
-        pass
-    files = [f for f in os.listdir(path)
-                        if os.path.isfile(os.path.join(path, f))]
-    for i in trange(len(files), desc='requesting facepp api', leave=True):        
-        detect_faces(path,files[i])      
+    

@@ -20,3 +20,6 @@ bresnet50_ft_weight.pkl
 resnet50_ft_weight.pkl
 
 optim/
+events.out.tfevent*
+*.pyc
+*cpython-310.pyc

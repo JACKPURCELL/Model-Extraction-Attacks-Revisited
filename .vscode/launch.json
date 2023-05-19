@@ -121,6 +121,21 @@
             "args":["--sample_times","5","--balance","--optimizer","SGD","--epochs","50","--n_samples","1024","--log_dir","--batch_size","256","--model","resnet50","--grad_clip","3.0","--lr","0.1","--op_parameters","full","--validate_interval","5","--num_classes","7","--dataset","rafdb","--hapi_info","fer/rafdb/microsoft_fer/22-05-23","--split_label_percent","0.46"]
 
 
+        },
+        {
+            "name": "pgd.py",
+            "type": "python",
+            "request": "launch",
+            "program": "main.py",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "cwd": "/home/jkl6486/hermes",
+            "env":{
+                "CUDA_VISIBLE_DEVICES":"0"
+            },
+            "args":["--optimizer","SGD","--epochs","15","--adv_train","pgd","--log_dir","test1_pgd","--pgd_percent","0.1","--batch_size","64","--model","resnet50","--lr","3e-2","--op_parameters","full","--validate_interval","1","--num_classes","8","--dataset","kdef","--lr_scheduler","--save","--api","amazon"
+        ]
+
         }
     
     ]

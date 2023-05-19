@@ -126,7 +126,7 @@ class KDEF(datasets.ImageFolder):
                     soft_label = torch.ones(7)*0.14285714285714285
                     hapi_label = torch.tensor(6)
             case 'amazon':
-                soft_label = torch.ones(7)
+                soft_label = torch.ones(8)
                 if len(api_result[0]) != 1:
                     soft_label[0] = api_result[0]['ANGRY']*0.01
                     soft_label[1] = api_result[0]['DISGUSTED']*0.01
@@ -134,13 +134,13 @@ class KDEF(datasets.ImageFolder):
                     soft_label[3] = api_result[0]['HAPPY']*0.01
                     soft_label[4] = api_result[0]['SAD']*0.01
                     soft_label[5] = api_result[0]['SURPRISED']*0.01
-                    soft_label[6] = api_result[0]['CALM']*0.01 + api_result[0]['CONFUSED']*0.01
-                    # soft_label[7] = api_result[0]['CONFUSED']
+                    soft_label[6] = api_result[0]['CALM']*0.01 
+                    soft_label[7] = api_result[0]['CONFUSED']*0.01
 
                     hapi_label = torch.argmax(soft_label)
                 else:
-                    soft_label = torch.ones(7)*0.14285714285714285
-                    hapi_label = torch.tensor(6)        
+                    soft_label = torch.ones(8)*0.14285714285714285
+                    hapi_label = torch.tensor(7)        
   
             # case 'microsoft':
             #     soft_label = torch.ones(3)
