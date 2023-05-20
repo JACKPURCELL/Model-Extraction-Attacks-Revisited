@@ -7,6 +7,6 @@ pandas
 seaborn
 matplotlib
 opencv-python
-"hapi @ git+https://github.com/lchen001/hapi@main"
-"trojanzoo @ git+https://github.com/ain-soph/trojanzoo@main"
+hapi @ git+https://github.com/lchen001/hapi@main
+trojanzoo @ git+https://github.com/ain-soph/trojanzoo@main
 
