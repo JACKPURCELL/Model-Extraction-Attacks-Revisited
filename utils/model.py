@@ -601,7 +601,7 @@ def get_api(_input, x, indices, api='amazon', tea_model=None):
 
                 with io.open(path, 'rb') as image:
                     responses = client.detect_faces(Image={'Bytes': image.read()}, Attributes=["ALL"])
-                    soft_label = torch.ones(7)
+                    soft_label = torch.ones(8)
 
                     if len(responses['FaceDetails']) != 0:
                         api_result = [{

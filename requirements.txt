@@ -1,0 +1,10 @@
+nltk
+tensorboard
+boto3
+transformers
+torchattacks
+pandas
+seaborn
+matplotlib
+opencv-python
+"hapi @ git+https://github.com/lchen001/hapi@main"
