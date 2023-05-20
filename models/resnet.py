@@ -45,7 +45,8 @@ class ResNet(nn.Module):
         ModelClass = getattr(torchvision.models, model_name)
         self.model = ModelClass(weights='DEFAULT').cuda()
         self.model.fc = nn.Linear(in_features=2048, out_features=8631,bias=True).cuda()
-        self.load_state_dict('/home/jkl6486/hermes/resnet50_ft_weight.pkl')
+        if model_name == 'resnet50':
+            self.load_state_dict('/home/jkl6486/hermes/resnet50_ft_weight.pkl')
         if norm_par is not None:
             self.norm_par = norm_par
             self.transform = transforms.Normalize( mean=norm_par['mean'], std= norm_par['std'])   

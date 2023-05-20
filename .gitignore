@@ -23,3 +23,6 @@ optim/
 events.out.tfevent*
 *.pyc
 *cpython-310.pyc
+
+
+exp_model/
