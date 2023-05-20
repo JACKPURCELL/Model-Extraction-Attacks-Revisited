@@ -139,7 +139,7 @@ class KDEF(datasets.ImageFolder):
 
                     hapi_label = torch.argmax(soft_label)
                 else:
-                    soft_label = torch.ones(8)*0.14285714285714285
+                    soft_label = torch.ones(8)*0.125
                     hapi_label = torch.tensor(7)        
   
             # case 'microsoft':

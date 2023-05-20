@@ -133,7 +133,7 @@
             "env":{
                 "CUDA_VISIBLE_DEVICES":"0"
             },
-            "args":["--optimizer","SGD","--epochs","15","--adv_train","pgd","--log_dir","test1_pgd","--pgd_percent","0.1","--batch_size","64","--model","resnet50","--lr","3e-2","--op_parameters","full","--validate_interval","1","--num_classes","8","--dataset","kdef","--lr_scheduler","--save","--api","amazon"
+            "args":["--optimizer","SGD","--epochs","15","--adv_train","pgd","--log_dir","test1_pgd","--pgd_percent","0.1","--batch_size","64","--model","resnet50","--lr","3e-2","--op_parameters","full","--validate_interval","1","--num_classes","7","--dataset","kdef","--lr_scheduler","--save","--api","facepp"
         ]
 
         }

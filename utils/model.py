@@ -529,7 +529,7 @@ def get_api(_input, x, indices, api='amazon', tea_model=None):
     convert_tensor = T.ToTensor()
 
     # convert the tensor to PIL image using above transform
-    soft_label_batch = torch.zeros((x.shape[0], 7))
+    soft_label_batch = torch.zeros((x.shape[0], 8 if api =='amazon' else 7))
     hapi_label_batch = torch.zeros((x.shape[0]))
     adv_x_batch = torch.zeros_like(x)
     new_indices = torch.zeros((x.shape[0]), dtype=torch.long)
@@ -558,15 +558,15 @@ def get_api(_input, x, indices, api='amazon', tea_model=None):
         match api:
             case 'facepp':
                 with io.open(path, 'rb') as image:
-                    data = {'api_key': '0KHi8-QNz1qcDUSAzpcbCSQBfBL8GZPJ',
-                            'api_secret': '0A_i8hjaXU4UqLbmpXKpj9qmEwzUqBn0',
+                    data = {'api_key': '_5FIJ5HcL3L5IQTfEEmAvRYbjL6QzGWb',
+                            'api_secret': 'aEGVrumV8O0pACkQf-giP2R_3mcMTF9q',
                             'image_base64': base64.b64encode(image.read()),
                             'return_attributes': 'emotion'}
                     attempts = 0
                     success = False
                     while attempts < 3 and not success:
                         try:
-                            r = requests.post(url='https://api-cn.faceplusplus.com/facepp/v3/detect', data=data)
+                            r = requests.post(url='https://api-us.faceplusplus.com/facepp/v3/detect', data=data)
                             success = True
                         except:
                             attempts += 1
@@ -676,7 +676,7 @@ def distillation(module: nn.Module, pgd_set, num_classes: int,
     if adv_train is not None or adv_valid:
         if adv_train == 'pgd':
             from trojanzoo.optim import PGD
-            pgd = PGD(pgd_alpha=2 / 255, pgd_eps=8 / 255, iteration=20, random_init=False)
+            pgd = PGD(pgd_alpha=2 / 255, pgd_eps=8 / 255, iteration=7, random_init=True)
 
         elif adv_train == 'cw':
             cw = CW(module, c=1, kappa=0, steps=7, lr=0.01)
@@ -695,8 +695,8 @@ def distillation(module: nn.Module, pgd_set, num_classes: int,
 
                 model_label = torch.argmax(selected_output, dim=-1)
 
-                def pgd_loss_fn(_input: torch.Tensor,**kwargs):
-                    return -F.cross_entropy(forward_fn(_input), model_label)
+                def pgd_loss_fn(_input: torch.Tensor,target:torch.Tensor,**kwargs):
+                    return -F.cross_entropy(forward_fn(_input), target)
 
                 @torch.no_grad()
                 def early_stop_check(current_idx: torch.Tensor,
@@ -710,7 +710,7 @@ def distillation(module: nn.Module, pgd_set, num_classes: int,
                     return result.detach().cpu()
                 pgd.early_stop_check = early_stop_check
 
-                adv_x, succ_tensor = pgd.optimize(_input=selected_data, loss_fn=pgd_loss_fn,target=model_label)
+                adv_x, succ_tensor = pgd.optimize(_input=selected_data, loss_fn=pgd_loss_fn,target=model_label,loss_kwargs={'target':model_label})
                 succ_tensor = succ_tensor.eq(-1)
 
                 # adv_x, succ_tensor = pgd(forward_fn, selected_data, torch.argmax(selected_output, dim=-1))
