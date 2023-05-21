@@ -113,13 +113,13 @@ class EXPW(datasets.ImageFolder):
         match self.api:
             case 'amazon':
                 #TODO: add amazon api
-                with open(os.path.join('/data/jc/data/image/RAFDB', 'amazon_api', path.split('/')[-1]), mode='r') as p:
+                with open(os.path.join('/data/jc/data/image/EXPW_224', 'amazon_api', path.split('/')[-1]), mode='r') as p:
                     api_result = json.load(p)
             case 'facepp':
 
                 #TODO: add facepp api
                 
-                with open(os.path.join('/data/jc/data/image/RAFDB', 'facepp_api', path.split('/')[-1]), mode='r') as p:
+                with open(os.path.join('/data/jc/data/image/EXPW_224', 'facepp_api', path.split('/')[-1]), mode='r') as p:
                     api_result = json.load(p)
 
         if self.transform is not None:
