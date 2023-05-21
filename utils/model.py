@@ -654,7 +654,7 @@ def distillation(module: nn.Module, pgd_set, num_classes: int,
                  folder_path: str = None, suffix: str = None,
                  main_tag: str = 'train', tag: str = '',
 
-                 verbose: bool = True, output_freq: str = 'iter', indent: int = 0,
+                 verbose: bool = True, output_freq: str = 'epoch', indent: int = 0,
                  change_train_eval: bool = True, lr_scheduler_freq: str = 'epoch',
                  backward_and_step: bool = True,
                  mixmatch: bool = False, label_train: bool = False, hapi_label_train: bool = False,
