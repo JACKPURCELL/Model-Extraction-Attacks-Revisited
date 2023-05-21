@@ -42,11 +42,15 @@ class ResNet(nn.Module):
     def __init__(self, norm_par=None,model_name: str = 'resnet50',num_classes=7):
 
         super(ResNet, self).__init__() 
-        ModelClass = getattr(torchvision.models, model_name)
-        self.model = ModelClass(weights='DEFAULT').cuda()
-        if model_name == 'resnet50':
+        if model_name == 'resnet50_vggface2':
+            ModelClass = getattr(torchvision.models, 'resnet50')
+            self.model = ModelClass(weights='DEFAULT').cuda()
             self.model.fc = nn.Linear(in_features=self.model.fc.in_features, out_features=8631,bias=True).cuda()
             self.load_state_dict('/home/jkl6486/hermes/resnet50_ft_weight.pkl')
+        else:
+            ModelClass = getattr(torchvision.models, model_name)
+            self.model = ModelClass(weights='DEFAULT').cuda()
+       
         if norm_par is not None:
             self.norm_par = norm_par
             self.transform = transforms.Normalize( mean=norm_par['mean'], std= norm_par['std'])   
