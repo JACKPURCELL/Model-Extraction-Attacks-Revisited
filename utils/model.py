@@ -621,7 +621,8 @@ def get_api(_input, x, indices, api='amazon', tea_model=None):
                         soft_label[3] = api_result[0]['HAPPY'] * 0.01
                         soft_label[4] = api_result[0]['SAD'] * 0.01
                         soft_label[5] = api_result[0]['SURPRISED'] * 0.01
-                        soft_label[6] = api_result[0]['CALM'] * 0.01 + api_result[0]['CONFUSED'] * 0.01
+                        soft_label[6] = api_result[0]['CALM'] * 0.01 
+                        soft_label[7] = api_result[0]['CONFUSED'] * 0.01
                         hapi_label = torch.argmax(soft_label)
                         soft_label_batch[i - noface_num, :] = soft_label
                         hapi_label_batch[i - noface_num] = hapi_label
