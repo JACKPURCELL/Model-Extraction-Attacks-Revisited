@@ -18,6 +18,8 @@ import torch
 import boto3
 import torchvision
 
+from dataset.kdef import KDEF
+
 
 client = boto3.client('rekognition')
 
@@ -1102,9 +1104,12 @@ def distillation(module: nn.Module, pgd_set, num_classes: int,
         if adaptive and _epoch % 2 == 0 and sample_times != 0:
             # -------
             sample_times -= 1
-            unlabel_dataset = Subset(RAFDB(input_directory=os.path.join('/data/jc/data/image/RAFDB', "train"),
-                                           hapi_data_dir=hapi_data_dir, hapi_info=hapi_info, api=api),
-                                     unlabel_dataset_indices)
+            # unlabel_dataset = Subset(RAFDB(input_directory=os.path.join('/data/jc/data/image/RAFDB', "train"),
+            #                                hapi_data_dir=hapi_data_dir, hapi_info=hapi_info, api=api),
+            #                          unlabel_dataset_indices)
+            unlabel_dataset = Subset(KDEF(input_directory=os.path.join('/data/jc/data/image/KDEF_and_AKDEF/KDEF_spilit',"train"),
+                                 hapi_data_dir=hapi_data_dir,hapi_info=hapi_info,api=api),unlabel_dataset_indices)
+            
 
             unlabel_dataloader = DataLoader(dataset=unlabel_dataset,
                                             batch_size=batch_size,
@@ -1128,7 +1133,9 @@ def distillation(module: nn.Module, pgd_set, num_classes: int,
                     outputs_u_total, unlabel_dataset_indices, n_samples)), 0)
             unlabel_dataset_indices = np.setdiff1d(unlabel_dataset_indices, new_label_indices.numpy())
 
-            new_label_dataset = Subset(RAFDB(input_directory=os.path.join('/data/jc/data/image/RAFDB', "train"), hapi_data_dir=hapi_data_dir, hapi_info=hapi_info, api=api),
+            # new_label_dataset = Subset(RAFDB(input_directory=os.path.join('/data/jc/data/image/RAFDB', "train"), hapi_data_dir=hapi_data_dir, hapi_info=hapi_info, api=api),
+            #                            new_label_indices)
+            new_label_dataset = Subset(KDEF(input_directory=os.path.join('/data/jc/data/image/KDEF_and_AKDEF/KDEF_spilit', "train"), hapi_data_dir=hapi_data_dir, hapi_info=hapi_info, api=api),
                                        new_label_indices)
             # unlabel_dataset = Subset(RAFDB(input_directory=os.path.join('/data/jc/data/image/RAFDB',"train"),hapi_data_dir=hapi_data_dir,hapi_info=hapi_info,api=api),
             #                             unlabel_dataset_indices)
