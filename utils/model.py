@@ -580,13 +580,13 @@ def get_api(_input, x, indices, api='amazon', tea_model=None):
                     soft_label = torch.ones(7)
 
                     if len(responses['faces']) != 0:
-                        soft_label[0] = responses['faces'][0]['attributes']['emotion']['anger']
-                        soft_label[1] = responses['faces'][0]['attributes']['emotion']['disgust']
-                        soft_label[2] = responses['faces'][0]['attributes']['emotion']['fear']
-                        soft_label[3] = responses['faces'][0]['attributes']['emotion']['happiness']
-                        soft_label[4] = responses['faces'][0]['attributes']['emotion']['sadness']
-                        soft_label[5] = responses['faces'][0]['attributes']['emotion']['surprise']
-                        soft_label[6] = responses['faces'][0]['attributes']['emotion']['neutral']
+                        soft_label[0] = responses['faces'][0]['attributes']['emotion']['anger']* 0.01
+                        soft_label[1] = responses['faces'][0]['attributes']['emotion']['disgust']* 0.01
+                        soft_label[2] = responses['faces'][0]['attributes']['emotion']['fear']* 0.01
+                        soft_label[3] = responses['faces'][0]['attributes']['emotion']['happiness']* 0.01
+                        soft_label[4] = responses['faces'][0]['attributes']['emotion']['sadness']* 0.01
+                        soft_label[5] = responses['faces'][0]['attributes']['emotion']['surprise']* 0.01
+                        soft_label[6] = responses['faces'][0]['attributes']['emotion']['neutral']* 0.01
                         hapi_label = torch.argmax(soft_label)
                         soft_label_batch[i - noface_num, :] = soft_label
                         hapi_label_batch[i - noface_num] = hapi_label
@@ -671,7 +671,7 @@ def distillation(module: nn.Module, pgd_set, num_classes: int,
 
                  **kwargs):
     r"""Train the model"""
-    start_pgd_epoch = 7
+    start_pgd_epoch = 0
     if epochs <= 0:
         return
     after_loss_fn = None
