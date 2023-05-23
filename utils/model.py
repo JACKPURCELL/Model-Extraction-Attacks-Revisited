@@ -524,7 +524,7 @@ from torchvision.utils import save_image
 
 
 def get_api(_input, x, indices, api='amazon', tea_model=None):
-    adv_x_num = 400
+    adv_x_num = 500
 
     # define a transform to convert a tensor to PIL image
     transform = T.ToPILImage(mode='RGB')
@@ -686,7 +686,9 @@ def distillation(module: nn.Module, pgd_set, num_classes: int,
         else:
             raise NotImplementedError(f'{adv_train=} is not supported yet.')
 
-        def after_loss_fn(forward_fn, _input: torch.Tensor, _label, ori_img=None, ori_soft=None, _soft_label: torch.Tensor = None, _output: torch.Tensor = None, optimizer: Optimizer = None, mode='train', tea_model=None, **kwargs):
+        def after_loss_fn(forward_fn, _input: torch.Tensor, _label, ori_img=None, ori_soft=None,
+                          _soft_label: torch.Tensor = None, _output: torch.Tensor = None,
+                          optimizer: Optimizer = None, mode='train', tea_model=None, **kwargs):
 
             num_samples = _input.shape[0]
             num_to_select = int(pgd_percent * num_samples)
@@ -749,6 +751,7 @@ def distillation(module: nn.Module, pgd_set, num_classes: int,
                 _input[new_indices] = adv_x
                 ori_soft_label = _soft_label[new_indices]
                 _soft_label[new_indices] = _adv_soft_label
+                hapi_label = torch.argmax(_soft_label, dim=-1)
                 adv_output = forward_fn(_input)
                 attack_succ = (1 - float(torch.sum(torch.eq(torch.argmax(adv_output[new_indices], dim=-1), torch.argmax(
                     _output[new_indices], dim=-1)).to(torch.int)).item() / len(ori_soft_label))) * 100
@@ -761,18 +764,21 @@ def distillation(module: nn.Module, pgd_set, num_classes: int,
                 if ori_img is not None:
                     _input = torch.cat([ori_img, adv_x], dim=0)
                     _soft_label = torch.cat([ori_soft, _adv_soft_label], dim=0)
-
+                    hapi_label = torch.argmax(_soft_label, dim=-1)
                 else:
                     _input = torch.cat([_input, adv_x], dim=0)
                     _soft_label = torch.cat([_soft_label, _adv_soft_label], dim=0)
-
+                    hapi_label = torch.argmax(_soft_label, dim=-1)
                 adv_output = forward_fn(_input)
                 attack_succ = (1 - float(torch.sum(torch.eq(torch.argmax(adv_output[num_samples:], dim=-1), torch.argmax(
                     _output[new_indices], dim=-1)).to(torch.int)).item() / len(ori_soft_label))) * 100
                 ahapi_succ = (1 - float(torch.sum(torch.eq(torch.argmax(ori_soft_label, dim=-1),
                               torch.argmax(_adv_soft_label, dim=-1)).to(torch.int)).item() / len(ori_soft_label))) * 100
-
-            loss = loss_fn(_output=adv_output, _soft_label=_soft_label)
+            
+            if hapi_label_train:
+                loss = loss_fn(_label=hapi_label, _output=adv_output)
+            else:
+                loss = loss_fn(_output=adv_output, _soft_label=_soft_label)
 
             if mode == 'train':
                 loss.backward()
@@ -929,35 +935,55 @@ def distillation(module: nn.Module, pgd_set, num_classes: int,
                         hapi_label = hapi_label.cuda()
 
                         _output = forward_fn(_input)
-
+                        end_pgd_epoch = 15
                         if adv_train and _epoch > start_pgd_epoch:
-                            optimizer.zero_grad()
-                            loss, adv_x, _adv_soft_label, _adv_hapi_label, attack_succ, ahapi_succ = after_loss_fn(
-                                forward_fn, _input=_input, _label=_label, _soft_label=_soft_label, _output=_output, optimizer=optimizer, tea_model=tea_model)
-                            if grad_clip is not None:
-                                nn.utils.clip_grad_norm_(params, grad_clip)
-                            optimizer.step()
+                            if _epoch < end_pgd_epoch:
+                                optimizer.zero_grad()
+                                loss, adv_x, _adv_soft_label, _adv_hapi_label, attack_succ, ahapi_succ = after_loss_fn(
+                                    forward_fn, _input=_input, _label=_label, hapi_label=hapi_label,_soft_label=_soft_label, 
+                                    _output=_output, optimizer=optimizer, tea_model=tea_model)
+                                if grad_clip is not None:
+                                    nn.utils.clip_grad_norm_(params, grad_clip)
+                                optimizer.step()
 
-                            logger.update(n=_adv_soft_label.shape[0], attack_succ=attack_succ, ahapi_succ=ahapi_succ)
-                            #=====reuse
+                                logger.update(n=_adv_soft_label.shape[0], attack_succ=attack_succ, ahapi_succ=ahapi_succ)
+                                #=====reuse
 
-                            if i == 0 and _epoch == start_pgd_epoch +1:
-                                adv_x_list = []
-                                adv_soft_label_list =[]
+                                if i == 0 and _epoch == start_pgd_epoch +1:
+                                    adv_x_list = []
+                                    adv_soft_label_list =[]
 
-                            if _epoch > 1 and len(adv_x_list) != 0:
-                                # print(len(adv_x_list))
+                                if _epoch > 1 and len(adv_x_list) != 0:
+                                    # print(len(adv_x_list))
+                                    for adv_x_inlist, adv_soft_label_inlist in zip(adv_x_list, adv_soft_label_list):
+                                        optimizer.zero_grad()
+                                        if hapi_label_train:
+                                            loss = loss_fn(_label=torch.argmax(adv_soft_label_inlist,dim=-1), _output=forward_fn(adv_x_inlist))
+                                        else:
+                                            loss = loss_fn( _soft_label=adv_soft_label_inlist, _output=forward_fn(adv_x_inlist))
+                                        loss.backward()
+                                        if grad_clip is not None:
+                                            nn.utils.clip_grad_norm_(params, grad_clip)
+                                        optimizer.step()
+
+                                adv_x_list.append(adv_x)
+                                adv_soft_label_list.append(_adv_soft_label)
+                                #=====reuse
+                            else:
+                                if hapi_label_train:
+                                    loss = loss_fn(_label=hapi_label, _output=_output)
+                                else:
+                                    loss = loss_fn(_soft_label=_soft_label, _output=_output)
                                 for adv_x_inlist, adv_soft_label_inlist in zip(adv_x_list, adv_soft_label_list):
                                     optimizer.zero_grad()
-                                    loss = loss_fn( _soft_label=adv_soft_label_inlist, _output=forward_fn(adv_x_inlist))
+                                    if hapi_label_train:
+                                        loss = loss_fn(_label=torch.argmax(adv_soft_label_inlist,dim=-1), _output=forward_fn(adv_x_inlist))
+                                    else:
+                                        loss = loss_fn( _soft_label=adv_soft_label_inlist, _output=forward_fn(adv_x_inlist))
                                     loss.backward()
                                     if grad_clip is not None:
                                         nn.utils.clip_grad_norm_(params, grad_clip)
                                     optimizer.step()
-
-                            adv_x_list.append(adv_x)
-                            adv_soft_label_list.append(_adv_soft_label)
-                            #=====reuse
                         elif encoder_train:
                             criterion = nn.BCELoss()
                             loss = criterion(_output, _input)

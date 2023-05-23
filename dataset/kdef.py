@@ -23,6 +23,10 @@ def get_transform_base(mode: str, use_tuple: bool = False,
         #     transforms.RandomResizedCrop((crop_shape, crop_shape) if use_tuple else crop_shape),
         #     transforms.RandomHorizontalFlip(),
         # ]
+        # transform_list = [
+        #     transforms.RandomRotation(90),
+        #     transforms.Grayscale(num_output_channels=3),
+        # ]
     
       
         transform_list=[]
