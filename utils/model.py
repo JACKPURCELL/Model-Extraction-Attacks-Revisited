@@ -590,7 +590,7 @@ def get_api(_input, x, indices, api='amazon', tea_model=None):
                         hapi_label = torch.argmax(soft_label)
                         soft_label_batch[i - noface_num, :] = soft_label
                         hapi_label_batch[i - noface_num] = hapi_label
-                        adv_x_batch[i - noface_num, :, :, :] = convert_tensor(Image.open(path))
+                        adv_x_batch[i - noface_num, :, :, :] = x[i, :, :, :]
                         new_indices[i - noface_num] = indices[i]
                     else:
                         noface_num += 1
@@ -657,7 +657,7 @@ def distillation(module: nn.Module, pgd_set, num_classes: int,
                  folder_path: str = None, suffix: str = None,
                  main_tag: str = 'train', tag: str = '',
 
-                 verbose: bool = True, output_freq: str = 'epoch', indent: int = 0,
+                 verbose: bool = True, output_freq: str = 'iter', indent: int = 0,
                  change_train_eval: bool = True, lr_scheduler_freq: str = 'epoch',
                  backward_and_step: bool = True,
                  mixmatch: bool = False, label_train: bool = False, hapi_label_train: bool = False,
@@ -671,7 +671,7 @@ def distillation(module: nn.Module, pgd_set, num_classes: int,
 
                  **kwargs):
     r"""Train the model"""
-    start_pgd_epoch = 0
+    start_pgd_epoch = 7
     if epochs <= 0:
         return
     after_loss_fn = None
@@ -939,23 +939,25 @@ def distillation(module: nn.Module, pgd_set, num_classes: int,
                             optimizer.step()
 
                             logger.update(n=_adv_soft_label.shape[0], attack_succ=attack_succ, ahapi_succ=ahapi_succ)
+                            #=====reuse
 
-                            # if i == 0 and _epoch == 1:
-                            #     adv_x_list = []
-                            #     adv_soft_label_list =[]
+                            if i == 0 and _epoch == start_pgd_epoch +1:
+                                adv_x_list = []
+                                adv_soft_label_list =[]
 
-                            # if len(adv_x_list) != 0:
-                            #     # print(len(adv_x_list))
-                            #     for adv_x_inlist, adv_soft_label_inlist in zip(adv_x_list, adv_soft_label_list):
-                            #         optimizer.zero_grad()
-                            #         loss = loss_fn( _soft_label=adv_soft_label_inlist, _output=forward_fn(adv_x_inlist))
-                            #         loss.backward()
-                            #         if grad_clip is not None:
-                            #             nn.utils.clip_grad_norm_(params, grad_clip)
-                            #         optimizer.step()
+                            if _epoch > 1 and len(adv_x_list) != 0:
+                                # print(len(adv_x_list))
+                                for adv_x_inlist, adv_soft_label_inlist in zip(adv_x_list, adv_soft_label_list):
+                                    optimizer.zero_grad()
+                                    loss = loss_fn( _soft_label=adv_soft_label_inlist, _output=forward_fn(adv_x_inlist))
+                                    loss.backward()
+                                    if grad_clip is not None:
+                                        nn.utils.clip_grad_norm_(params, grad_clip)
+                                    optimizer.step()
 
-                            # adv_x_list.append(adv_x)
-                            # adv_soft_label_list.append(_adv_soft_label)
+                            adv_x_list.append(adv_x)
+                            adv_soft_label_list.append(_adv_soft_label)
+                            #=====reuse
                         elif encoder_train:
                             criterion = nn.BCELoss()
                             loss = criterion(_output, _input)
@@ -1104,11 +1106,11 @@ def distillation(module: nn.Module, pgd_set, num_classes: int,
         if adaptive and _epoch % 2 == 0 and sample_times != 0:
             # -------
             sample_times -= 1
-            # unlabel_dataset = Subset(RAFDB(input_directory=os.path.join('/data/jc/data/image/RAFDB', "train"),
-            #                                hapi_data_dir=hapi_data_dir, hapi_info=hapi_info, api=api),
-            #                          unlabel_dataset_indices)
-            unlabel_dataset = Subset(KDEF(input_directory=os.path.join('/data/jc/data/image/KDEF_and_AKDEF/KDEF_spilit',"train"),
-                                 hapi_data_dir=hapi_data_dir,hapi_info=hapi_info,api=api),unlabel_dataset_indices)
+            unlabel_dataset = Subset(RAFDB(input_directory=os.path.join('/data/jc/data/image/RAFDB', "train"),
+                                           hapi_data_dir=hapi_data_dir, hapi_info=hapi_info, api=api),
+                                     unlabel_dataset_indices)
+            # unlabel_dataset = Subset(KDEF(input_directory=os.path.join('/data/jc/data/image/KDEF_and_AKDEF/KDEF_spilit',"train"),
+            #                      hapi_data_dir=hapi_data_dir,hapi_info=hapi_info,api=api),unlabel_dataset_indices)
             
 
             unlabel_dataloader = DataLoader(dataset=unlabel_dataset,
@@ -1133,10 +1135,10 @@ def distillation(module: nn.Module, pgd_set, num_classes: int,
                     outputs_u_total, unlabel_dataset_indices, n_samples)), 0)
             unlabel_dataset_indices = np.setdiff1d(unlabel_dataset_indices, new_label_indices.numpy())
 
-            # new_label_dataset = Subset(RAFDB(input_directory=os.path.join('/data/jc/data/image/RAFDB', "train"), hapi_data_dir=hapi_data_dir, hapi_info=hapi_info, api=api),
-            #                            new_label_indices)
-            new_label_dataset = Subset(KDEF(input_directory=os.path.join('/data/jc/data/image/KDEF_and_AKDEF/KDEF_spilit', "train"), hapi_data_dir=hapi_data_dir, hapi_info=hapi_info, api=api),
+            new_label_dataset = Subset(RAFDB(input_directory=os.path.join('/data/jc/data/image/RAFDB', "train"), hapi_data_dir=hapi_data_dir, hapi_info=hapi_info, api=api),
                                        new_label_indices)
+            # new_label_dataset = Subset(KDEF(input_directory=os.path.join('/data/jc/data/image/KDEF_and_AKDEF/KDEF_spilit', "train"), hapi_data_dir=hapi_data_dir, hapi_info=hapi_info, api=api),
+            #                            new_label_indices)
             # unlabel_dataset = Subset(RAFDB(input_directory=os.path.join('/data/jc/data/image/RAFDB',"train"),hapi_data_dir=hapi_data_dir,hapi_info=hapi_info,api=api),
             #                             unlabel_dataset_indices)
         if new_label_indices is not None:
@@ -1293,7 +1295,7 @@ def dis_validate(module: nn.Module, num_classes: int,
         header: str = '{yellow}{0}{reset}'.format(print_prefix, **ansi)
         header = header.ljust(max(len(print_prefix), 30) + get_ansi_len(header))
         loader_epoch = logger.log_every(loader, header=header,
-                                        tqdm_header='Batch',
+                                        tqdm_header='Epoch',
                                         indent=indent)
     encoder_num = 0
     for data in loader_epoch:
