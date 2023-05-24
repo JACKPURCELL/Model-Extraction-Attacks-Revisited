@@ -921,6 +921,8 @@ def distillation(module: nn.Module, pgd_set, num_classes: int,
                         hapi_label = hapi_label.cuda()
 
                         encoded, _output = forward_fn(_input)
+                        criterion = nn.BCELoss()
+                        loss = criterion(_output, _input)
                     else:
                         _input, _label, _soft_label, hapi_label = data
 

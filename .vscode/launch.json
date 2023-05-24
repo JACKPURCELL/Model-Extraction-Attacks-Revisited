@@ -19,7 +19,8 @@
             "env":{
                 "CUDA_VISIBLE_DEVICES":"3"
             },
-            "args":["--model","xlnet-base-cased","--batch_size","255","--num_classes","3","--grad_clip","3.0","--lr","5e-4","--api","amazon_hapi"]
+            "args":["--optimizer","Adam","--epochs","100","--batch_size","64","--model","autoencoder","--lr","0.001","--op_parameters","full","--validate_interval","1","--num_classes","7","--encoder_train","--dataset","rafdb","--lr_scheduler","--api","amazon","--save","--weight_decay","0.0","--log_dir","encoder_train_rafdb"
+        ]
 
 
         },        
