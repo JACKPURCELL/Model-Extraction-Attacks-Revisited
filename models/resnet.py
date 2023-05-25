@@ -201,7 +201,7 @@ class ResNet(nn.Module):
                             total_iters=lr_warmup_epochs)
                     case 'constant':
                         warmup_lr_scheduler = torch.optim.lr_scheduler.ConstantLR(
-                            optimizer, factor=lr_warmup_decay,
+                            optimizer, factor=1.0,
                             total_iters=lr_warmup_epochs)
                     case _:
                         raise NotImplementedError(
