@@ -678,9 +678,9 @@ def distillation(module: nn.Module, pgd_set, num_classes: int,
         return
     after_loss_fn = None
     forward_fn = module.__call__
+    already_selected = []
     
     if adaptive == 'kcenter':
-        already_selected = []
 
             
         
