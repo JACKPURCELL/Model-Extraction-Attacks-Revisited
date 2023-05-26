@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 
 
+from collections import OrderedDict
 import pickle
 import torch
 import torch.nn as nn
 import torchvision.models
-
-
+from models.recorder import EmbeddingRecorder
 from torch.optim.optimizer import Optimizer
 from torch.optim.lr_scheduler import _LRScheduler
 import torch.utils.data
@@ -39,23 +39,40 @@ from torchvision import transforms
         #                    help='sgm gamma (default: 1.0)')
 class ResNet(nn.Module):
 
-    def __init__(self, norm_par=None,model_name: str = 'resnet50',num_classes=7):
+    def __init__(self, norm_par=None,model_name: str = 'resnet50',record_embedding=False,num_classes=7):
 
         super(ResNet, self).__init__() 
         if model_name == 'resnet50_vggface2':
             ModelClass = getattr(torchvision.models, 'resnet50')
-            self.model = ModelClass(weights='DEFAULT').cuda()
-            self.model.fc = nn.Linear(in_features=self.model.fc.in_features, out_features=8631,bias=True).cuda()
+            _model = ModelClass(weights='DEFAULT').cuda()
+            _model.fc = nn.Linear(in_features=_model.fc.in_features, out_features=8631,bias=True).cuda()
             self.load_state_dict('/home/jkl6486/hermes/resnet50_ft_weight.pkl')
         else:
             ModelClass = getattr(torchvision.models, model_name)
-            self.model = ModelClass(weights='DEFAULT').cuda()
+            _model = ModelClass(weights='DEFAULT').cuda()
        
         if norm_par is not None:
             self.norm_par = norm_par
             self.transform = transforms.Normalize( mean=norm_par['mean'], std= norm_par['std'])   
-        self.model.fc = nn.Linear(in_features=self.model.fc.in_features, out_features=num_classes,bias=True).cuda()
-
+        _model.fc = nn.Linear(in_features=_model.fc.in_features, out_features=num_classes,bias=True).cuda()
+        module_list: list[nn.Module] = []
+        module_list.append(('conv1', _model.conv1))
+        module_list.append(('bn1', _model.bn1))
+        module_list.append(('relu', _model.relu))
+        module_list.append(('maxpool', _model.maxpool))
+        module_list.extend([('layer1', _model.layer1),
+                            ('layer2', _model.layer2),
+                            ('layer3', _model.layer3),
+                            ('layer4', _model.layer4)])
+        
+        self.features = nn.Sequential(OrderedDict(module_list)).cuda()
+        module_list: list[nn.Module] = []
+        module_list.extend([
+                            ('fc', nn.Linear(in_features=_model.fc.in_features, out_features=num_classes,bias=True))
+                         ])
+        self.classifier = nn.Sequential(OrderedDict(module_list)).cuda()
+        self.avgpool = nn.AdaptiveAvgPool2d((1, 1)).cuda()
+        self.embedding_recorder = EmbeddingRecorder(record_embedding).cuda()
 
     def load_state_dict(self, fname):
         """
@@ -80,9 +97,20 @@ class ResNet(nn.Module):
                 raise KeyError('unexpected key "{}" in state_dict'.format(name))
         
     def forward(self, x):
+        if self.norm_par is not None:
+            x = self.transform(x)
+        x = self.features(x)
+        x = self.avgpool(x)
+        x = torch.flatten(x, 1)
+        x = self.embedding_recorder(x)
+        x = self.classifier(x)
+        return x
+
+    
+    def get_features(self, x):
         if self.norm_par is None:
-            return self.model(x)
-        return self.model(self.transform(x))
+            return self.features(x)
+        return self.features(self.transform(x))
     
     def define_optimizer(
         self, parameters: str | Iterator[nn.Parameter] = 'full',
@@ -167,7 +195,8 @@ class ResNet(nn.Module):
                 kwargs['eps'] = eps
                 keys = OptimType.__init__.__code__.co_varnames
                 kwargs = {k: v for k, v in kwargs.items() if k in keys}
-                params = self.model.parameters()
+                params =  list(self.parameters())
+                # params.extend(list(self.classifier.parameters()))
                 optimizer = OptimType(params, lr, **kwargs)
             case _:
                 raise ValueError        

@@ -17,6 +17,8 @@ import torch.nn as nn
 import torch
 import boto3
 import torchvision
+from adp_method.euclidean import euclidean_dist
+from dataset.dataset import split_dataset
 
 from dataset.kdef import KDEF
 
@@ -664,11 +666,11 @@ def distillation(module: nn.Module, pgd_set, num_classes: int,
                  api=False, task='sentiment', unlabel_dataset_indices=None,
                  hapi_data_dir=None, hapi_info=None,
                  batch_size=None, num_workers=None,
-                 n_samples=None, adaptive=False, get_sampler_fn=None,
+                 n_samples=None, adaptive=None, get_sampler_fn=None,
                  balance=False, sample_times=10, tea_model=None, AE=None, encoder_attack=False,
                  pgd_percent=None,
-                 encoder_train=False,
-
+                 encoder_train=False,train_dataset=None,
+                workers=8,
                  **kwargs):
     r"""Train the model"""
     start_pgd_epoch = 0
@@ -676,6 +678,91 @@ def distillation(module: nn.Module, pgd_set, num_classes: int,
         return
     after_loss_fn = None
     forward_fn = module.__call__
+    
+    if adaptive == 'kcenter':
+        already_selected = []
+
+            
+        
+        def construct_matrix(n_train,index=None):
+            with torch.no_grad():
+                with module.embedding_recorder:
+                    sample_num = n_train if index is None else len(index)
+                    matrix = []
+                    full_train_loader = DataLoader(dataset=train_dataset if index is None else
+                                    torch.utils.data.Subset(train_dataset, index),
+                            batch_size=batch_size,
+                            num_workers=num_workers)
+                    for i, data in enumerate(full_train_loader):
+
+                        _input, _label, _soft_label, hapi_label = data
+                        _input = _input.cuda()
+                        _soft_label = _soft_label.cuda()
+                        _label = _label.cuda()
+                        hapi_label = hapi_label.cuda()
+
+                        _output = forward_fn(_input)
+                            
+                        matrix.append(module.embedding_recorder.embedding)
+            return torch.cat(matrix, dim=0)
+                
+        def k_center_greedy(matrix, budget: int,   index=None, already_selected=None,
+                            print_freq: int = 20):
+            if type(matrix) == torch.Tensor:
+                assert matrix.dim() == 2
+
+
+            sample_num = matrix.shape[0]
+            assert sample_num >= 1
+
+            if budget < 0:
+                raise ValueError("Illegal budget size.")
+            elif budget > sample_num:
+                budget = sample_num
+
+            if index is not None:
+                assert matrix.shape[0] == len(index)
+            else:
+                index = np.arange(sample_num)
+            metric = euclidean_dist
+            assert callable(metric)
+
+            already_selected = np.array(already_selected)
+
+            with torch.no_grad():
+                if already_selected.__len__() == 0:
+                    select_result = np.zeros(sample_num, dtype=bool)
+                    # Randomly select one initial point.
+                    already_selected = [np.random.randint(0, sample_num)]
+                    budget -= 1
+                    select_result[already_selected] = True
+                else:
+                    select_result = np.in1d(index, already_selected)
+ 
+                num_of_already_selected = np.sum(select_result)
+
+                # Initialize a (num_of_already_selected+budget-1)*sample_num matrix storing distances of pool points from
+                # each clustering center.
+                dis_matrix = -1 * torch.ones([num_of_already_selected + budget - 1, sample_num], requires_grad=False).cuda()
+
+                dis_matrix[:num_of_already_selected, ~select_result] = metric(matrix[select_result], matrix[~select_result])
+
+                mins = torch.min(dis_matrix[:num_of_already_selected, :], dim=0).values
+
+                for i in range(budget):
+                    if i % print_freq == 0:
+                        print("| Selecting [%3d/%3d]" % (i + 1, budget))
+                    p = torch.argmax(mins).item()
+                    select_result[p] = True
+
+                    if i == budget - 1:
+                        break
+                    mins[p] = -1
+                    dis_matrix[num_of_already_selected + i, ~select_result] = metric(matrix[[p]], matrix[~select_result])
+                    mins = torch.min(mins, dis_matrix[num_of_already_selected + i])
+            return index[select_result].tolist()
+
+
     if adv_train is not None or adv_valid:
         if adv_train == 'pgd':
             from trojanzoo.optim import PGD
@@ -837,6 +924,31 @@ def distillation(module: nn.Module, pgd_set, num_classes: int,
     for _epoch in iterator:
         _epoch += 1
         logger.reset()
+        if adaptive == 'kcenter':
+            n_train=len(train_dataset)
+            fraction=0.5
+            balance_adp = False
+            
+            selection_result = np.array([], dtype=np.int32)
+            if balance_adp:
+                for c in range(num_classes):
+                    class_index = np.where(np.array(train_dataset.targets) == c)[0]
+                    selection_result = np.append(selection_result, k_center_greedy(construct_matrix(n_train,class_index),
+                                                                                budget=round(fraction * len(class_index)),                                                                          
+                                                                                index=class_index,
+                                                                                already_selected=[] if already_selected==[] else already_selected[
+                                                                                    np.in1d(already_selected,
+                                                                                            class_index)]))
+                    already_selected.extend(selection_result)
+            else:
+                selection_result = k_center_greedy(matrix=construct_matrix(n_train), budget=n_samples,already_selected=already_selected)
+                already_selected.extend(selection_result)
+                
+            dst_subset = torch.utils.data.Subset(train_dataset, selection_result)
+            loader_train = torch.utils.data.DataLoader(dst_subset, batch_size=batch_size, shuffle=True,
+                                                       num_workers=workers, pin_memory=True,drop_last=True)
+            
+            
         loader_epoch = loader_train
         if verbose and output_freq == 'iter':
             header: str = '{blue_light}{0}: {1}{reset}'.format(
@@ -1131,7 +1243,8 @@ def distillation(module: nn.Module, pgd_set, num_classes: int,
                               hapi_loss=float(loss), hapi_acc1=hapi_acc1)
         optimizer.zero_grad()
 
-        if adaptive and _epoch % 2 == 0 and sample_times != 0:
+       
+        if adaptive == 'entropy' and _epoch % 2 == 0 and sample_times != 0:
             # -------
             sample_times -= 1
             unlabel_dataset = Subset(RAFDB(input_directory=os.path.join('/data/jc/data/image/RAFDB', "train"),

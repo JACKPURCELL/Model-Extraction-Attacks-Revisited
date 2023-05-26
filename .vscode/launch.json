@@ -137,6 +137,22 @@
             "args":["--optimizer","SGD","--epochs","15","--adv_train","pgd","--log_dir","test1_pgd","--pgd_percent","0.1","--batch_size","64","--model","resnet50","--lr","3e-2","--op_parameters","full","--validate_interval","1","--num_classes","7","--dataset","kdef","--lr_scheduler","--save","--api","facepp"
         ]
 
+        },
+        {
+            "name": "noraml_adp.py",
+            "type": "python",
+            "request": "launch",
+            "program": "main.py",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "cwd": "/home/jkl6486/hermes",
+            "env":{
+                "CUDA_VISIBLE_DEVICES":"0"
+            },
+            "args":["--n_samples","128","--optimizer","Lion","--epochs","200","--batch_size","64","--model","resnet50","--lr","3e-4","--op_parameters","full","--validate_interval","1","--num_classes","8","--dataset","rafdb","--lr_scheduler","--save","--weight_decay","0.0","--adaptive","kcenter","--log_dir","test_adp","--api","amazon","--seed","1688","--validate_interval","1"
+
+        ]
+
         }
     
     ]

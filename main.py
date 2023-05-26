@@ -79,7 +79,7 @@ parser.add_argument('--label_batch', type=int, default=-1)
 
 parser.add_argument('--pgd_percent', type=float)
 parser.add_argument('--balance', action='store_true')
-parser.add_argument('--adaptive', action='store_true')
+parser.add_argument('--adaptive', choices=['entropy', 'kcenter'])
 parser.add_argument('--n_samples', type=int)
 parser.add_argument('--sample_times', type=int)
 
@@ -350,9 +350,9 @@ distillation(module=model,pgd_set = test_dataset,adv_train=args.adv_train,num_cl
              mixmatch=args.mixmatch,
              save=args.save,label_train=args.label_train,
              hapi_label_train=args.hapi_label_train, lr_scheduler_freq=args.lr_scheduler_freq,
-             api=args.api,task=task,unlabel_dataset_indices=_unlabel_dataset.indices if args.adaptive else None,
+             api=args.api,task=task,unlabel_dataset_indices=unlabel_dataset_indices,
              hapi_data_dir=args.hapi_data_dir,hapi_info=args.hapi_info,
              batch_size=args.batch_size,num_workers=args.num_workers,
              n_samples = args.n_samples,adaptive=args.adaptive,get_sampler_fn=get_sampler,
              balance=args.balance,sample_times=args.sample_times,tea_model=tea_model,AE=AE,encoder_attack=args.encoder_attack,pgd_percent=args.pgd_percent,
-             encoder_train=args.encoder_train)
+             encoder_train=args.encoder_train,train_dataset=train_dataset,workers=args.num_workers)
