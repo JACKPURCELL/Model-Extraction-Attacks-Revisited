@@ -121,6 +121,7 @@ class ResNet(nn.Module):
         lr_step_size: int = 30, lr_gamma: float = 0.1,
         epochs: int = None, lr_min: float = 0.0,
         lr_warmup_percent: float = 0.0, lr_warmup_method: str = 'constant',
+        lr_warmup_epoch=0,
         lr_warmup_decay: float = 0.01,
         betas = (0.9, 0.99),
         eps = 1e-8,
@@ -203,7 +204,7 @@ class ResNet(nn.Module):
 
         _lr_scheduler: _LRScheduler = None
         
-        lr_warmup_epochs = int(epochs * lr_warmup_percent)
+        lr_warmup_epochs = lr_warmup_epoch if lr_warmup_epoch != 0 else int(epochs * lr_warmup_percent)
         
         if lr_scheduler:
             main_lr_scheduler: _LRScheduler

@@ -49,6 +49,7 @@ parser.add_argument('--num_classes', type=int, default=2)
 parser.add_argument('--num_workers', type=int, default=8)
 parser.add_argument('--lr', type=float)
 parser.add_argument('--lr_warmup_percent', type=float, default=0.0)
+parser.add_argument('--lr_warmup_epoch', type=int, default=0)
 parser.add_argument('--custom_lr', type=float, default=1e-3)
 parser.add_argument('--betas', type=tuple)
 # parser.add_argument('--betas', type=tuple, default=(0.9, 0.99))
@@ -295,7 +296,8 @@ if args.encoder_attack:
 else:
     AE = None
 # Acquire iterators through data loaders
-
+if args.adaptive == 'kcenter' or args.adaptive == 'random':
+    train_loader = None
 
 test_loader = DataLoader(dataset=test_dataset,
                          batch_size=args.batch_size,
@@ -314,6 +316,7 @@ optimizer, lr_scheduler = model.define_optimizer(
         lr_scheduler=args.lr_scheduler,
         epochs=args.epochs, 
         lr_warmup_percent=args.lr_warmup_percent, 
+        lr_warmup_epoch=args.lr_warmup_epoch,
         betas=args.betas,
         eps=args.eps,total_iters=total_iters)
 

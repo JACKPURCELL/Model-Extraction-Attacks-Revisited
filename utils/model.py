@@ -896,8 +896,7 @@ def distillation(module: nn.Module, pgd_set, num_classes: int,
     params: list[nn.Parameter] = []
     for param_group in optimizer.param_groups:
         params.extend(param_group['params'])
-    len_loader_train = len(loader_train)
-    total_iter = (epochs - resume) * len_loader_train
+
 
     logger = MetricLogger()
     if mixmatch or encoder_train:
@@ -925,31 +924,48 @@ def distillation(module: nn.Module, pgd_set, num_classes: int,
         _epoch += 1
         logger.reset()
         if adaptive == 'kcenter':
-            n_train=len(train_dataset)
-            fraction=0.5
-            balance_adp = False
-            
-            selection_result = np.array([], dtype=np.int32)
-            if balance_adp:
-                for c in range(num_classes):
-                    class_index = np.where(np.array(train_dataset.targets) == c)[0]
-                    selection_result = np.append(selection_result, k_center_greedy(construct_matrix(n_train,class_index),
-                                                                                budget=round(fraction * len(class_index)),                                                                          
-                                                                                index=class_index,
-                                                                                already_selected=[] if already_selected==[] else already_selected[
-                                                                                    np.in1d(already_selected,
-                                                                                            class_index)]))
-                    already_selected.extend(selection_result)
-            else:
-                selection_result = k_center_greedy(matrix=construct_matrix(n_train), budget=n_samples,already_selected=already_selected)
-                already_selected.extend(selection_result)
+            if sample_times != 0:
+                loader_train = None
+                sample_times -= 1
+                n_train=len(train_dataset)
+                fraction=0.5
+                balance_adp = False
                 
-            dst_subset = torch.utils.data.Subset(train_dataset, selection_result)
-            loader_train = torch.utils.data.DataLoader(dst_subset, batch_size=batch_size, shuffle=True,
-                                                       num_workers=workers, pin_memory=True,drop_last=True)
+                selection_result = np.array([], dtype=np.int32)
+                if balance_adp:
+                    for c in range(num_classes):
+                        class_index = np.where(np.array(train_dataset.targets) == c)[0]
+                        selection_result = np.append(selection_result, k_center_greedy(construct_matrix(n_train,class_index),
+                                                                                    budget=round(fraction * len(class_index)),                                                                          
+                                                                                    index=class_index,
+                                                                                    already_selected=[] if already_selected==[] else already_selected[
+                                                                                        np.in1d(already_selected,
+                                                                                                class_index)]))
+                        already_selected.extend(selection_result)
+                else:
+                    selection_result = k_center_greedy(matrix=construct_matrix(n_train), budget=n_samples,already_selected=already_selected)
+                    already_selected.extend(selection_result)                         
+                
+                dst_subset = torch.utils.data.Subset(train_dataset, selection_result)
+                loader_train = torch.utils.data.DataLoader(dst_subset, batch_size=batch_size, shuffle=True,
+                                                        num_workers=workers, pin_memory=True,drop_last=True)
+                
+        elif adaptive == 'random':
+            if sample_times != 0:
+                loader_train = None
+                sample_times -= 1
+                selection_result = np.random.choice(np.range(len(train_dataset)),n_samples,replace=False)
+                already_selected.extend(selection_result)
+                dst_subset = torch.utils.data.Subset(train_dataset, selection_result)
+                loader_train = torch.utils.data.DataLoader(dst_subset, batch_size=batch_size, shuffle=True,
+                                                        num_workers=workers, pin_memory=True,drop_last=True)
+                
+            
             
             
         loader_epoch = loader_train
+        len_loader_train = len(loader_train)
+        total_iter = (epochs - resume) * len_loader_train
         if verbose and output_freq == 'iter':
             header: str = '{blue_light}{0}: {1}{reset}'.format(
                 'Epoch', output_iter(_epoch, epochs), **ansi)
