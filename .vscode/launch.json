@@ -153,6 +153,23 @@
 
         ]
 
+        },
+        {
+            "name": "noraml_random.py",
+            "type": "python",
+            "request": "launch",
+            "program": "main.py",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "cwd": "/home/jkl6486/hermes",
+            "env":{
+                "CUDA_VISIBLE_DEVICES":"0"
+            },
+            "args":["--optimizer","Lion","--epochs","216","--batch_size","64","--model","resnet50","--lr","3e-4","--op_parameters","full","--validate_interval","1","--num_classes","8","--dataset","rafdb","--lr_scheduler","--save","--weight_decay","0.0","--sample_times","16","--n_samples","64","--adaptive","random","--lr_warmup_epoch","16","--log_dir","5_23_1688_b64_lion_resnet50img_adp_12_random","--api","amazon","--seed","1688","--validate_interval","1"
+
+
+        ]
+
         }
     
     ]

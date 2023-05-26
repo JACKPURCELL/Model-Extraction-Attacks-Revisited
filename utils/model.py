@@ -954,7 +954,8 @@ def distillation(module: nn.Module, pgd_set, num_classes: int,
             if sample_times != 0:
                 loader_train = None
                 sample_times -= 1
-                selection_result = np.random.choice(np.range(len(train_dataset)),n_samples,replace=False)
+                new_index = np.arange(len(train_dataset))[~np.in1d(np.arange(len(train_dataset)),already_selected)]
+                selection_result = np.random.choice(new_index,n_samples,replace=False)
                 already_selected.extend(selection_result)
                 dst_subset = torch.utils.data.Subset(train_dataset, selection_result)
                 loader_train = torch.utils.data.DataLoader(dst_subset, batch_size=batch_size, shuffle=True,

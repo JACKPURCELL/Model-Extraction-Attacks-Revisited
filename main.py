@@ -80,7 +80,7 @@ parser.add_argument('--label_batch', type=int, default=-1)
 
 parser.add_argument('--pgd_percent', type=float)
 parser.add_argument('--balance', action='store_true')
-parser.add_argument('--adaptive', choices=['entropy', 'kcenter'])
+parser.add_argument('--adaptive', choices=['entropy', 'kcenter','random'])
 parser.add_argument('--n_samples', type=int)
 parser.add_argument('--sample_times', type=int)
 
