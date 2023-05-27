@@ -90,6 +90,7 @@ parser.add_argument('--adv_train', choices=[None, 'pgd', 'free', 'cw'],
                            help='adversarial training (default: None)')
 parser.add_argument('--adv_valid', action='store_true')
 parser.add_argument('--encoder_train', action='store_true')
+parser.add_argument('--encoder_path',  type=str)
 parser.add_argument('--encoder_attack', action='store_true')
 
 parser.add_argument('--adv_train_iter', type=int, default=7)
@@ -289,10 +290,12 @@ else:
                     shuffle=shuffle,sampler=sampler,
                     num_workers=args.num_workers,drop_last=True)
     unlabel_iterator = None
-    
+    # /home/jkl6486/hermes/exp_adv_encoder/encoder_train_rafdb/model.pth
 if args.encoder_attack:
     AE = getattr(models,'autoencoder')(norm_par=train_dataset.norm_par)            
-    AE.load_state_dict(torch.load('/home/jkl6486/hermes/runs/encoder_pretrain_Adam/model.pth'))        
+    AE.load_state_dict(torch.load(args.encoder_path))   
+    for p in AE.parameters():
+        p.requires_grad = False
 else:
     AE = None
 # Acquire iterators through data loaders
