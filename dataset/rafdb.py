@@ -72,13 +72,13 @@ def get_transform_base(mode: str, use_tuple: bool = False,
     else:
         # TODO: torchvision.prototypes.transforms._presets.ImageClassificationEval
         transform = transforms.Compose([
-            # transforms.Resize((crop_shape, crop_shape) if use_tuple else crop_shape),
-            # transforms.CenterCrop((crop_shape, crop_shape) if use_tuple else crop_shape),
+            transforms.Resize((crop_shape, crop_shape) if use_tuple else crop_shape),
+            transforms.CenterCrop((crop_shape, crop_shape) if use_tuple else crop_shape),
             transforms.PILToTensor(),
             transforms.ConvertImageDtype(torch.float)])
     if norm_par is not None:
-                transform.transforms.append(transforms.Normalize(
-                mean=norm_par['mean'], std=norm_par['std']))
+        transform.transforms.append(transforms.Normalize(
+        mean=norm_par['mean'], std=norm_par['std']))
     return transform
 
 class TransformTwice:
@@ -100,12 +100,12 @@ class RAFDB(datasets.ImageFolder):
         if transform == 'Normal':
             transform = get_transform_base(
                 mode, use_tuple=True,
-                auto_augment=True, crop_shape = 100,
+                auto_augment=True, crop_shape = 224,
                 norm_par=None)
         elif transform == 'mixmatch':
             transform = get_transform_base(
                 mode, use_tuple=True,
-                auto_augment=True, crop_shape = 100,
+                auto_augment=True, crop_shape = 224,
                 norm_par=None)
             transform = TransformTwice(transform)
         elif transform == 'raw':

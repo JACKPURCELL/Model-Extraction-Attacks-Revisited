@@ -31,3 +31,8 @@ exp1/
 exp1_sa/
 nohup.out
 exp_adp/
+*.pyc
+exp_adv_encoder/
+
+
+
