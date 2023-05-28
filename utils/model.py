@@ -527,7 +527,7 @@ def distillation(module: nn.Module, pgd_set, num_classes: int,
                 workers=8,
                  **kwargs):
     r"""Train the model"""
-    start_pgd_epoch = 0
+    start_pgd_epoch = 10
     if epochs <= 0:
         return
     after_loss_fn = None
@@ -636,6 +636,9 @@ def distillation(module: nn.Module, pgd_set, num_classes: int,
             num_to_select = int(pgd_percent * num_samples)
             indices = torch.randperm(num_samples)[:num_to_select]
             selected_data = _input[indices]
+            
+            if ori_img is not None:
+                selected_ori_img = ori_img[indices]
             selected_label = _label[indices]
             selected_output = _output[indices]
             if adv_train == 'pgd' or mode == 'valid':
@@ -679,7 +682,7 @@ def distillation(module: nn.Module, pgd_set, num_classes: int,
                 raise NotImplementedError(f'{adv_train=} is not supported yet.')
 
             adv_x, _adv_soft_label, _adv_hapi_label, new_indices = get_api(
-                selected_data, adv_x, indices, api, tea_model)
+                selected_data if ori_img is None else selected_ori_img, adv_x, indices, api, tea_model)
             # new_output = forward_fn(adv_x)
             # m = nn.Softmax(dim=1)
 
@@ -719,10 +722,11 @@ def distillation(module: nn.Module, pgd_set, num_classes: int,
                     _soft_label = torch.cat([_soft_label, _adv_soft_label], dim=0)
                     hapi_label = torch.argmax(_soft_label, dim=-1)
                 adv_output = forward_fn(_input)
-                attack_succ = (1 - float(torch.sum(torch.eq(torch.argmax(adv_output[num_samples:], dim=-1), torch.argmax(
-                    _output[new_indices], dim=-1)).to(torch.int)).item() / len(ori_soft_label))) * 100
-                ahapi_succ = (1 - float(torch.sum(torch.eq(torch.argmax(ori_soft_label, dim=-1),
-                              torch.argmax(_adv_soft_label, dim=-1)).to(torch.int)).item() / len(ori_soft_label))) * 100
+                if new_indices != 0:
+                    attack_succ = (1 - float(torch.sum(torch.eq(torch.argmax(adv_output[num_samples:], dim=-1), torch.argmax(
+                        _output[new_indices], dim=-1)).to(torch.int)).item() / len(ori_soft_label))) * 100
+                    ahapi_succ = (1 - float(torch.sum(torch.eq(torch.argmax(ori_soft_label, dim=-1),
+                                torch.argmax(_adv_soft_label, dim=-1)).to(torch.int)).item() / len(ori_soft_label))) * 100
             
             if hapi_label_train:
                 loss = loss_fn(_label=hapi_label, _output=adv_output)
@@ -920,7 +924,8 @@ def distillation(module: nn.Module, pgd_set, num_classes: int,
                         _input = feature
                     else:
                         _input, _label, _soft_label, hapi_label = data
-
+                        ori_img = None
+                        ori_soft = None
                         _input = _input.cuda()
                         if tea_model is not None:
                             m = nn.Softmax(dim=1)
@@ -932,12 +937,12 @@ def distillation(module: nn.Module, pgd_set, num_classes: int,
                         hapi_label = hapi_label.cuda()
 
                         _output = forward_fn(_input)
-                    end_pgd_epoch = 15
+                    end_pgd_epoch = 25
                     if not mixmatch and not encoder_train:
                         if adv_train and _epoch > start_pgd_epoch:
                             if _epoch < end_pgd_epoch:
                                 optimizer.zero_grad()
-                                loss, adv_x, _adv_soft_label, _adv_hapi_label, attack_succ, ahapi_succ = after_loss_fn(
+                                loss, adv_x, _adv_soft_label, _adv_hapi_label, attack_succ, ahapi_succ = after_loss_fn(ori_img=ori_img, ori_soft=ori_soft,
                                     _input=_input, _label=_label, hapi_label=hapi_label,_soft_label=_soft_label, 
                                     _output=_output, optimizer=optimizer, tea_model=tea_model)
                                 if grad_clip is not None:
