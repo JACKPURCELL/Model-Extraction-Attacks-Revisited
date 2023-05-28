@@ -1322,7 +1322,7 @@ def dis_validate(module: nn.Module, num_classes: int,
         loader_epoch = logger.log_every(loader, header=header,
                                         tqdm_header='Epoch',
                                         indent=indent)
-    encoder_num = 0
+    encoder_num = 900
     for data in loader_epoch:
         if adv_valid:
             match task:

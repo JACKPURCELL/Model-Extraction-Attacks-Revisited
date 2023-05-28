@@ -21,26 +21,54 @@ class Autoencoder(nn.Module):
             self.transform = transforms.Normalize( mean=norm_par['mean'], std= norm_par['std'])   
         # Input size: [batch, 3, 32, 32]
         # Output size: [batch, 3, 32, 32]
+        # self.encoder = nn.Sequential(
+        #     nn.Conv2d(3, 12, 4, stride=2, padding=1),            # [batch, 12, 16, 16]
+        #     nn.ReLU(),
+        #     nn.Conv2d(12, 24, 4, stride=2, padding=1),           # [batch, 24, 8, 8]
+        #     nn.ReLU(),
+		# 	nn.Conv2d(24, 48, 4, stride=2, padding=1),           # [batch, 48, 4, 4]
+        #     nn.ReLU(),
+		# 	# nn.Conv2d(48, 96, 4, stride=2, padding=1),           # [batch, 96, 2, 2]
+        #     # nn.ReLU(),
+        # ).cuda()
+        # self.decoder = nn.Sequential(
+        #     # nn.ConvTranspose2d(96, 48, 4, stride=2, padding=1),  # [batch, 48, 4, 4]
+        #     # nn.ReLU(),
+		# 	nn.ConvTranspose2d(48, 24, 4, stride=2, padding=1),  # [batch, 24, 8, 8]
+        #     nn.ReLU(),
+		# 	nn.ConvTranspose2d(24, 12, 4, stride=2, padding=1),  # [batch, 12, 16, 16]
+        #     nn.ReLU(),
+        #     nn.ConvTranspose2d(12, 3, 4, stride=2, padding=1),   # [batch, 3, 32, 32]
+        #     nn.Sigmoid(),
+        # ).cuda()
+        # Input size: [batch, 3, 224, 224]
+        
         self.encoder = nn.Sequential(
-            nn.Conv2d(3, 12, 4, stride=2, padding=1),            # [batch, 12, 16, 16]
+            nn.Conv2d(3, 32, 4, stride=2, padding=1),            # [batch, 32, 112, 112]
             nn.ReLU(),
-            nn.Conv2d(12, 24, 4, stride=2, padding=1),           # [batch, 24, 8, 8]
+            nn.Conv2d(32, 64, 4, stride=2, padding=1),           # [batch, 64, 56, 56]
             nn.ReLU(),
-			nn.Conv2d(24, 48, 4, stride=2, padding=1),           # [batch, 48, 4, 4]
+			nn.Conv2d(64, 128, 4, stride=2, padding=1),           # [batch, 128, 28, 28]
             nn.ReLU(),
-			# nn.Conv2d(48, 96, 4, stride=2, padding=1),           # [batch, 96, 2, 2]
-            # nn.ReLU(),
+            nn.Conv2d(128, 256, 4, stride=2, padding=1),           # [batch, 256, 14, 14]
+            nn.ReLU(),
+            nn.Conv2d(256, 512, 4, stride=2, padding=1),           # [batch, 512, 7, 7]
+            nn.ReLU(),
         ).cuda()
+        
         self.decoder = nn.Sequential(
-            # nn.ConvTranspose2d(96, 48, 4, stride=2, padding=1),  # [batch, 48, 4, 4]
-            # nn.ReLU(),
-			nn.ConvTranspose2d(48, 24, 4, stride=2, padding=1),  # [batch, 24, 8, 8]
+            nn.ConvTranspose2d(512, 256, 4, stride=2, padding=1),  # [batch, 256, 14, 14]
             nn.ReLU(),
-			nn.ConvTranspose2d(24, 12, 4, stride=2, padding=1),  # [batch, 12, 16, 16]
+            nn.ConvTranspose2d(256, 128, 4, stride=2, padding=1),  # [batch, 128, 28, 28]
             nn.ReLU(),
-            nn.ConvTranspose2d(12, 3, 4, stride=2, padding=1),   # [batch, 3, 32, 32]
+			nn.ConvTranspose2d(128, 64, 4, stride=2, padding=1),  # [batch, 64, 56, 56]
+            nn.ReLU(),
+            nn.ConvTranspose2d(64, 32, 4, stride=2, padding=1),   # [batch, 32, 112, 112]
+            nn.ReLU(),
+            nn.ConvTranspose2d(32, 3, 4, stride=2, padding=1),   # [batch, 3, 224, 224]
             nn.Sigmoid(),
         ).cuda()
+        
 
     def forward(self, x):
         # if self.norm_par is not None:
