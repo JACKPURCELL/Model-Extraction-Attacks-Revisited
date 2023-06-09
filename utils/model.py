@@ -1453,10 +1453,10 @@ def dis_validate(module: nn.Module, num_classes: int,
                     criterion = nn.BCELoss()
                     loss = criterion(_output, _input)
                     logger.update(n=_input.size(0), loss=float(loss))
-                    x = torchvision.utils.make_grid(torch.cat((_input, _output), dim=0))
-                    path = os.path.join('/data/jc/data/image/encodelion', str(encoder_num) + '.png')
-                    encoder_num += 1
-                    save_image(x, path, 'png')
+                    # x = torchvision.utils.make_grid(torch.cat((_input, _output), dim=0))
+                    # path = os.path.join('/data/jc/data/image/encodelion', str(encoder_num) + '.png')
+                    # encoder_num += 1
+                    # save_image(x, path, 'png')
 
                     continue
                 else:
