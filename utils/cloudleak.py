@@ -18,6 +18,7 @@ import torch
 import boto3
 import torchvision
 from adp_method.euclidean import euclidean_dist
+from dataset.advdataset import advdataset
 from dataset.dataset import split_dataset
 
 
@@ -536,220 +537,43 @@ def distillation(module: nn.Module, pgd_set, num_classes: int,
     forward_fn = module.__call__
     already_selected = []
     
-    if adaptive == 'kcenter':
+    if adaptive == 'cloudleak':
+        from trojanzoo.optim import PGD
+        pgd = PGD(pgd_alpha=2 / 255, pgd_eps=4 / 255, iteration=7, random_init=True)
 
-            
-        selection_result = np.array([], dtype=np.int32)
-        
-        def construct_matrix(n_train,index=None):
-            with torch.no_grad():
-                with module.embedding_recorder:
-                    sample_num = n_train if index is None else len(index)
-                    matrix = []
-                    full_train_loader = DataLoader(dataset=train_dataset if index is None else
-                                    torch.utils.data.Subset(train_dataset, index),
-                            batch_size=batch_size,
-                            num_workers=num_workers)
-                    for i, data in enumerate(full_train_loader):
-
-                        _input, _label, _soft_label, hapi_label = data
-                        _input = _input.cuda()
-                        _soft_label = _soft_label.cuda()
-                        _label = _label.cuda()
-                        hapi_label = hapi_label.cuda()
-
-                        _output = forward_fn(_input)
-                            
-                        matrix.append(module.embedding_recorder.embedding)
-            return torch.cat(matrix, dim=0)
-                
-        def k_center_greedy(matrix, budget: int,   index=None, already_selected=None,
-                            print_freq: int = 20):
-            if type(matrix) == torch.Tensor:
-                assert matrix.dim() == 2
+        def after_loss_fn(_input: torch.Tensor, _output: torch.Tensor = None
+                          ):
 
 
-            sample_num = matrix.shape[0]
-            assert sample_num >= 1
+            model_label = torch.argmax(_output, dim=-1)
 
-            if budget < 0:
-                raise ValueError("Illegal budget size.")
-            elif budget > sample_num:
-                budget = sample_num
-
-            if index is not None:
-                assert matrix.shape[0] == len(index)
-            else:
-                index = np.arange(sample_num)
-            metric = euclidean_dist
-            assert callable(metric)
-
-            already_selected = np.array(already_selected)
-
-            with torch.no_grad():
-                if already_selected.__len__() == 0:
-                    select_result = np.zeros(sample_num, dtype=bool)
-                    # Randomly select one initial point.
-                    already_selected = [np.random.randint(0, sample_num)]
-                    budget -= 1
-                    select_result[already_selected] = True
-                else:
-                    select_result = np.in1d(index, already_selected)
- 
-                num_of_already_selected = np.sum(select_result)
-
-                # Initialize a (num_of_already_selected+budget-1)*sample_num matrix storing distances of pool points from
-                # each clustering center.
-                dis_matrix = -1 * torch.ones([num_of_already_selected + budget - 1, sample_num], requires_grad=False).cuda()
-
-                dis_matrix[:num_of_already_selected, ~select_result] = metric(matrix[select_result], matrix[~select_result])
-
-                mins = torch.min(dis_matrix[:num_of_already_selected, :], dim=0).values
-
-                for i in range(budget):
-                    if i % print_freq == 0:
-                        print("| Selecting [%3d/%3d]" % (i + 1, budget))
-                    p = torch.argmax(mins).item()
-                    select_result[p] = True
-
-                    if i == budget - 1:
-                        break
-                    mins[p] = -1
-                    dis_matrix[num_of_already_selected + i, ~select_result] = metric(matrix[[p]], matrix[~select_result])
-                    mins = torch.min(mins, dis_matrix[num_of_already_selected + i])
-            return index[select_result].tolist()
-
-
-    if adv_train is not None or adv_valid:
-
-
-        if adv_train == 'pgd':
-            from trojanzoo.optim import PGD
-            pgd = PGD(pgd_alpha=2 / 255, pgd_eps=4 / 255, iteration=7, random_init=True)
-
-        elif adv_train == 'cw':
-            cw = CW(module, c=1, kappa=0, steps=7, lr=0.01)
-        else:
-            raise NotImplementedError(f'{adv_train=} is not supported yet.')
-
-        def after_loss_fn(_input: torch.Tensor, _label, ori_img=None, ori_soft=None,
-                          _soft_label: torch.Tensor = None, _output: torch.Tensor = None,
-                          optimizer: Optimizer = None, mode='train', tea_model=None, **kwargs):
-
-            num_samples = _input.shape[0]
-            num_to_select = int(pgd_percent * num_samples)
-            indices = torch.randperm(num_samples)[:num_to_select]
-            selected_data = _input[indices]
-            
-            if ori_img is not None:
-                selected_ori_img = ori_img[indices]
-            selected_label = _label[indices]
-            selected_output = _output[indices]
-            if adv_train == 'pgd' or mode == 'valid':
-
-                model_label = torch.argmax(selected_output, dim=-1)
-
-                def pgd_loss_fn(_input: torch.Tensor,target:torch.Tensor,**kwargs):
-                    if encoder_attack:
-                        return -F.cross_entropy(forward_fn(AE.decoder(_input)), target)
-                    return -F.cross_entropy(forward_fn(_input), target)
-
-                @torch.no_grad()
-                def early_stop_check(current_idx: torch.Tensor,
-                                     adv_input: torch.Tensor, target: torch.Tensor, *args,
-                                     stop_threshold: float = None, require_class: bool = None,
-                                     **kwargs) -> torch.Tensor:
-                    if encoder_attack:
-                        _class = torch.argmax(forward_fn(AE.decoder(adv_input[current_idx])), dim=-1)
-                    else:
-                        _class = torch.argmax(forward_fn(adv_input[current_idx]), dim=-1)
-                    class_result = _class == target[current_idx]
-                    class_result = ~class_result
-                    result = class_result
-                    return result.detach().cpu()
-                pgd.early_stop_check = early_stop_check
-
-                adv_x, succ_tensor = pgd.optimize(_input=selected_data, loss_fn=pgd_loss_fn,target=model_label,loss_kwargs={'target':model_label})
+            def pgd_loss_fn(_input: torch.Tensor,target:torch.Tensor,**kwargs):
                 if encoder_attack:
-                    adv_x=AE.decoder(adv_x)
-                succ_tensor = succ_tensor.eq(-1)
+                    return -F.cross_entropy(forward_fn(AE.decoder(_input)), target)
+                return -F.cross_entropy(forward_fn(_input), target)
 
-                # adv_x, succ_tensor = pgd(forward_fn, selected_data, torch.argmax(selected_output, dim=-1))
-                # adv_x, succ_tensor = pgd.optimize(_input=_input, target=torch.argmax(selected_output,dim=-1))
-                # adv_x = _input + (adv_x - _input).detach()
-
-            elif adv_train == 'cw':
-                adv_x = cw(selected_data, torch.argmax(selected_output, dim=-1))
-                # adv_x = cw(selected_data,selected_label)
-                # adv_x = cw(_input,torch.argmax(_output,dim=-1))
-            else:
-                raise NotImplementedError(f'{adv_train=} is not supported yet.')
-
-            adv_x, _adv_soft_label, _adv_hapi_label, new_indices = get_api(
-                selected_data if ori_img is None else selected_ori_img, adv_x, indices, api, tea_model)
-            # new_output = forward_fn(adv_x)
-            # m = nn.Softmax(dim=1)
-
-            # max_return = torch.max(m(new_output),dim=-1)
-            # max_ori = torch.max(m(selected_output),dim=-1)
-            # max_diff = max_return[0] - max_ori[0]
-            # index = torch.where(succ_tensor!=-1)[0]
-
-            # if len(index)>0:
-            #     print('max_ori',max_ori[0][index],'max_return',max_return[0][index],'max_diff',max_diff[index],succ_tensor)
-
-            replace = False
-            if replace:  # replace
-                adv_x = adv_x.cuda()
-                _adv_soft_label = _adv_soft_label.cuda()
-                new_indices = new_indices.cuda()
-
-                _input[new_indices] = adv_x
-                ori_soft_label = _soft_label[new_indices]
-                _soft_label[new_indices] = _adv_soft_label
-                hapi_label = torch.argmax(_soft_label, dim=-1)
-                adv_output = forward_fn(_input)
-                if len(new_indices) != 0:
-                    attack_succ = (1 - float(torch.sum(torch.eq(torch.argmax(adv_output[new_indices], dim=-1), torch.argmax(
-                        _output[new_indices], dim=-1)).to(torch.int)).item() / len(ori_soft_label))) * 100
-                    ahapi_succ = (1 - float(torch.sum(torch.eq(torch.argmax(ori_soft_label, dim=-1),
-                              torch.argmax(_adv_soft_label, dim=-1)).to(torch.int)).item() / len(ori_soft_label))) * 100
+            @torch.no_grad()
+            def early_stop_check(current_idx: torch.Tensor,
+                                    adv_input: torch.Tensor, target: torch.Tensor, *args,
+                                    stop_threshold: float = None, require_class: bool = None,
+                                    **kwargs) -> torch.Tensor:
+                if encoder_attack:
+                    _class = torch.argmax(forward_fn(AE.decoder(adv_input[current_idx])), dim=-1)
                 else:
-                    attack_succ = 0.0
-                    ahapi_succ = 0.0
-            else:  # cat
-                adv_x = adv_x.cuda()
-                _adv_soft_label = _adv_soft_label.cuda()
-                ori_soft_label = _soft_label[new_indices]
-                if ori_img is not None:
-                    _input = torch.cat([ori_img, adv_x], dim=0)
-                    _soft_label = torch.cat([ori_soft, _adv_soft_label], dim=0)
-                    hapi_label = torch.argmax(_soft_label, dim=-1)
-                else:
-                    _input = torch.cat([_input, adv_x], dim=0)
-                    _soft_label = torch.cat([_soft_label, _adv_soft_label], dim=0)
-                    hapi_label = torch.argmax(_soft_label, dim=-1)
-                adv_output = forward_fn(_input)
+                    _class = torch.argmax(forward_fn(adv_input[current_idx]), dim=-1)
+                class_result = _class == target[current_idx]
+                class_result = ~class_result
+                result = class_result
+                return result.detach().cpu()
+            pgd.early_stop_check = early_stop_check
 
-                if len(new_indices) != 0:
-                    attack_succ = (1 - float(torch.sum(torch.eq(torch.argmax(adv_output[num_samples:], dim=-1), torch.argmax(
-                        _output[new_indices], dim=-1)).to(torch.int)).item() / len(ori_soft_label))) * 100
-                    ahapi_succ = (1 - float(torch.sum(torch.eq(torch.argmax(ori_soft_label, dim=-1),
-                                torch.argmax(_adv_soft_label, dim=-1)).to(torch.int)).item() / len(ori_soft_label))) * 100
-                else:
-                    attack_succ = 0.0
-                    ahapi_succ = 0.0
+            adv_x, succ_tensor = pgd.optimize(_input=_input, loss_fn=pgd_loss_fn,target=model_label,loss_kwargs={'target':model_label})
             
-            if hapi_label_train:
-                loss = loss_fn(_label=hapi_label, _output=adv_output)
-            else:
-                loss = loss_fn(_output=adv_output, _soft_label=_soft_label)
-
-            if mode == 'train':
-                loss.backward()
-                return loss, adv_x, _adv_soft_label, _adv_hapi_label, attack_succ, ahapi_succ
-            else:
-                return loss, adv_x, _adv_soft_label, _adv_hapi_label
+            succ_tensor = succ_tensor.eq(-1)
+            adv_x, _adv_soft_label, _adv_hapi_label, new_indices = get_api(
+                _input, adv_x, np.arange(adv_x.shape[0]), api)
+           
+            return adv_x, _adv_soft_label, _adv_hapi_label,new_indices
 
     writer = SummaryWriter(log_dir=log_dir)
     validate_fn = dis_validate
@@ -759,18 +583,7 @@ def distillation(module: nn.Module, pgd_set, num_classes: int,
     best_validate_result = (0.0, float('inf'))
     best_acc = 0.0
     best_loss = 100.0
-    # if validate_interval != 0:
-    #     validate_result = validate_fn(module=module,
-    #                                 num_classes=num_classes,
-    #                                 loader=loader_valid,
-    #                                 writer=writer, tag=tag,
-    #                                 _epoch=start_epoch,
-    #                                 verbose=verbose, indent=indent,
-    #                                 label_train=label_train,
-    #                                 api=api,task=task,after_loss_fn=after_loss_fn,adv_valid=adv_valid,
-    #                                 **kwargs)
-    #     best_acc = best_validate_result[0]
-
+    
     params: list[nn.Parameter] = []
     for param_group in optimizer.param_groups:
         params.extend(param_group['params'])
@@ -801,53 +614,42 @@ def distillation(module: nn.Module, pgd_set, num_classes: int,
     for _epoch in iterator:
         _epoch += 1
         logger.reset()
-        if adaptive == 'kcenter':
-            if sample_times != 0:
-                loader_train = None
-                sample_times -= 1
-                n_train=len(train_dataset)
-                fraction=0.5
-                balance_adp = False
-                
-                if balance_adp:
-                    for c in range(num_classes):
-                        class_index = np.where(np.array(train_dataset.targets) == c)[0]
-                        selection_result = np.append(selection_result, k_center_greedy(construct_matrix(n_train,class_index),
-                                                                                    budget=round(fraction * len(class_index)),                                                                          
-                                                                                    index=class_index,
-                                                                                    already_selected=[] if already_selected==[] else already_selected[
-                                                                                        np.in1d(selection_result,
-                                                                                                class_index)]))
-
-                else:
-                    selection_result = k_center_greedy(matrix=construct_matrix(n_train), budget=n_samples,already_selected=selection_result)
-                    
-                
-                dst_subset = torch.utils.data.Subset(train_dataset, selection_result)
-                loader_train = torch.utils.data.DataLoader(dst_subset, batch_size=batch_size, shuffle=True,
-                                                        num_workers=workers, pin_memory=True,drop_last=True)
-                
-        elif adaptive == 'random':
-            if sample_times != 0:
+      
+        if adaptive == 'cloudleak':
+            if sample_times != 0 and (_epoch+1) %2 ==0:
                 loader_train = None
                 sample_times -= 1
                 new_index = np.arange(len(train_dataset))[~np.in1d(np.arange(len(train_dataset)),already_selected)]
                 selection_result = np.random.choice(new_index,n_samples,replace=False)
                 already_selected.extend(selection_result)
-                dst_subset = torch.utils.data.Subset(train_dataset, already_selected)
-                loader_train = torch.utils.data.DataLoader(dst_subset, batch_size=batch_size, shuffle=True,
-                                                        num_workers=workers, pin_memory=True,drop_last=True)
-        elif adaptive == 'cloudleak':
-            if sample_times != 0:
-                loader_train = None
-                sample_times -= 1
-                new_index = np.arange(len(train_dataset))[~np.in1d(np.arange(len(train_dataset)),already_selected)]
-                selection_result = np.random.choice(new_index,n_samples,replace=False)
-                already_selected.extend(selection_result)
+                print("new_index",new_index.shape,"  already_selected",len(already_selected))
                 #the clean input need to query in this epoch
                 dst_subset = torch.utils.data.Subset(train_dataset, selection_result)
-                loader_train = torch.utils.data.DataLoader(dst_subset, batch_size=batch_size, shuffle=False,
-                                                        num_workers=workers, pin_memory=True,drop_last=False)        
+                loader_dst = torch.utils.data.DataLoader(dst_subset, batch_size=batch_size, shuffle=False,
+                                                        num_workers=workers, pin_memory=True,drop_last=False)
+
+                for i,data in enumerate(loader_dst):
+                    input_batch,_,_,_ = data
+                    input_batch = input_batch.cuda()
+                    with torch.no_grad():
+                        _output=forward_fn(input_batch)
+                    # generate adv_x and query
+                    adv_x, _adv_soft_label, _adv_hapi_label,new_indices = after_loss_fn(_input=input_batch, _output=_output)
+                    if i == 0 and _epoch == 1:
+                        Synthetic_x = input_batch[new_indices]
+                        Synthetic_adv_x = adv_x
+                        Synthetic_adv_soft_label = _adv_soft_label
+                        Synthetic_adv_hapi_label = _adv_hapi_label
+                    else:
+                        Synthetic_x = torch.cat((Synthetic_x,input_batch[new_indices]),dim=0) 
+                        Synthetic_adv_x = torch.cat((Synthetic_adv_x,adv_x),dim=0) 
+                        Synthetic_adv_soft_label = torch.cat((Synthetic_adv_soft_label,_adv_soft_label),dim=0)  
+                        Synthetic_adv_hapi_label = torch.cat((Synthetic_adv_hapi_label,_adv_hapi_label),dim=0)  
+                adv_dataset = advdataset(Synthetic_x.cpu(),Synthetic_adv_x.cpu(), Synthetic_adv_soft_label.cpu(),Synthetic_adv_hapi_label.cpu())
+                loader_train = torch.utils.data.DataLoader(adv_dataset, batch_size=batch_size, shuffle=True,
+                                                        num_workers=workers, pin_memory=True,drop_last=False)
+                
+               
             
             
             
@@ -871,350 +673,54 @@ def distillation(module: nn.Module, pgd_set, num_classes: int,
 
 
             _iter = _epoch * len_loader_train + i
-            match task:
-                case 'emotion':
-                    if mixmatch:
-                        mixed_input, mixed_target, batch_size = mixmatch_get_data(data, forward_fn, unlabel_iterator)
 
-                        # interleave labeled and unlabed samples between batches to get correct batchnorm calculation
-                        mixed_input = list(torch.split(mixed_input, batch_size))
-                        mixed_input = interleave_fn(mixed_input, batch_size)
-
-                        logits = [forward_fn(mixed_input[0])]
-                        for input in mixed_input[1:]:
-                            logits.append(forward_fn(input))
-
-                        # put interleaved samples back
-                        logits = interleave_fn(logits, batch_size)
-                        logits_x = logits[0]
-                        logits_u = torch.cat(logits[1:], dim=0)
-
-                        loss = loss_fn(outputs_x=logits_x, targets_x=mixed_target[:batch_size],
-                                       outputs_u=logits_u, targets_u=mixed_target[batch_size:], iter=_epoch, total_iter=epochs)
-
-                    elif encoder_train:
-                        _input, _label, _soft_label, hapi_label = data
-
-                        _input = _input.cuda()
-                        _soft_label = _soft_label.cuda()
-                        _label = _label.cuda()
-                        hapi_label = hapi_label.cuda()
-
-                        encoded, _output = forward_fn(_input)
-                        criterion = nn.BCELoss()
-                        loss = criterion(_output, _input)
-                    elif encoder_attack:
-                        _input, _label, _soft_label, hapi_label = data
-                        _input = _input.cuda()
-                        _soft_label = _soft_label.cuda()
-                        _label = _label.cuda()
-                        hapi_label = hapi_label.cuda()
-                        
-                        ori_img = _input
-                        
-                        feature = AE.encoder(_input)
-                        
-                        ori_soft = _soft_label
-                       
-                        hapi_label = torch.argmax(_soft_label, dim=-1)
-                        _output = forward_fn(AE.decoder(feature))
-                        _input = feature
-                    else:
-                        _input, _label, _soft_label, hapi_label = data
-                        ori_img = None
-                        ori_soft = None
-                        _input = _input.cuda()
-                        if tea_model is not None:
-                            m = nn.Softmax(dim=1)
-                            with torch.no_grad():
-                                _soft_label = m(tea_model(_input))
-                            hapi_label = torch.argmax(_soft_label, dim=-1)
-                        _soft_label = _soft_label.cuda()
-                        _label = _label.cuda()
-                        hapi_label = hapi_label.cuda()
-
-                        _output = forward_fn(_input)
-                    if not mixmatch and not encoder_train:
-                        if adv_train and _epoch >= start_pgd_epoch:
-                            if _epoch < end_pgd_epoch:
-                                optimizer.zero_grad()
-                                loss, adv_x, _adv_soft_label, _adv_hapi_label, attack_succ, ahapi_succ = after_loss_fn(ori_img=ori_img, ori_soft=ori_soft,
-                                    _input=_input, _label=_label, hapi_label=hapi_label,_soft_label=_soft_label, 
-                                    _output=_output, optimizer=optimizer, tea_model=tea_model)
-                                if grad_clip is not None:
-                                    nn.utils.clip_grad_norm_(params, grad_clip)
-                                optimizer.step()
-
-                                logger.update(n=_adv_soft_label.shape[0], attack_succ=attack_succ, ahapi_succ=ahapi_succ)
-
-                                if i == 0:
-                                    adv_x_list = adv_x
-                                    adv_soft_label_list = _adv_soft_label
-                                else:  
-                                    adv_x_list = torch.cat((adv_x_list,adv_x),dim=0)
-                                    adv_soft_label_list = torch.cat((adv_soft_label_list,_adv_soft_label),dim=0)
-
-                        elif encoder_train:
-                            criterion = nn.BCELoss()
-                            loss = criterion(_output, _input)
-                        elif label_train:
-                            loss = loss_fn(_label=_label, _output=_output)
-                        elif hapi_label_train:
-                            loss = loss_fn(_label=hapi_label, _output=_output)
-                        else:
-                            loss = loss_fn(_soft_label=_soft_label, _output=_output)
-
-                case 'sentiment':
-                    if module.model_name == 'xlnet':
-                        input_ids, token_type_ids, attention_mask, _label, _soft_label, hapi_label = data
-                        token_type_ids = token_type_ids.cuda()
-                    elif module.model_name == 'roberta':
-                        input_ids, attention_mask, _label, _soft_label, hapi_label = data
-                    input_ids = input_ids.cuda()
-                    attention_mask = attention_mask.cuda()
-                    _label = _label.cuda()
-                    _soft_label = _soft_label.cuda()
-                    hapi_label = hapi_label.cuda()
-                    if module.model_name == 'xlnet':
-                        _output = forward_fn(input_ids=input_ids, token_type_ids=token_type_ids,
-                                             attention_mask=attention_mask)
-                    elif module.model_name == 'roberta':
-                        _output = forward_fn(input_ids=input_ids, attention_mask=attention_mask)
-
-                    if label_train:
-                        loss = loss_fn(_label=_label, _output=_output)
-                    elif hapi_label_train:
-                        loss = loss_fn(_label=hapi_label, _output=_output)
-                    else:
-                        loss = loss_fn(_soft_label=_soft_label, _output=_output)
-                case 'cifar10':
-                    if encoder_train:
-                        _input, _label = data
-                        _input = _input.cuda()
-                        _label = _label.cuda()
-                        hapi_label = _label
-
-                        encoded, _output = forward_fn(_input)
-                        ori_img = None
-                        ori_soft = None
-                    elif encoder_attack:
-
-                        _input, _label = data
-                        _input = _input.cuda()
-                        ori_img = _input
-                        _label = _label.cuda()
-                        feature = AE.encoder(_input)
-                        decode_img = AE.decoder(feature)
-                        if tea_model is not None:
-                            m = nn.Softmax(dim=1)
-                        with torch.no_grad():
-                            _soft_label = m(tea_model(decode_img))
-                            ori_soft = m(tea_model(ori_img))
-                        hapi_label = torch.argmax(_soft_label, dim=-1)
-                        _output = forward_fn(decode_img)
-                        _input = decode_img
-                    else:
-                        _input, _label = data
-                        _input = _input.cuda()
-                        _label = _label.cuda()
-                        hapi_label = _label
-                        ori_img = None
-                        ori_soft = None
-                        if tea_model is not None:
-                            m = nn.Softmax(dim=1)
-                            with torch.no_grad():
-                                _soft_label = m(tea_model(_input))
-                            hapi_label = torch.argmax(_soft_label, dim=-1)
-                        _output = forward_fn(_input)
-
-                    if adv_train and _epoch >= start_pgd_epoch:
-                        optimizer.zero_grad()
-                        loss, adv_x, _adv_soft_label, _adv_hapi_label, attack_succ, ahapi_succ = after_loss_fn(_input=_input, ori_img=ori_img, ori_soft=ori_soft,
-                                                                                                               _label=_label, _soft_label=_soft_label, _output=_output, optimizer=optimizer, tea_model=tea_model)
-                        if grad_clip is not None:
-                            nn.utils.clip_grad_norm_(params, grad_clip)
-                        optimizer.step()
-
-                        logger.update(n=_adv_soft_label.shape[0], attack_succ=attack_succ, ahapi_succ=ahapi_succ)
-
-                     
-                    elif encoder_train:
-                        criterion = nn.BCELoss()
-                        loss = criterion(_output, _input)
-                    elif label_train:
-                        loss = loss_fn(_label=_label, _output=_output)
-                    elif hapi_label_train:
-                        loss = loss_fn(_label=hapi_label, _output=_output)
-                    else:
-                        loss = loss_fn(_soft_label=_soft_label, _output=_output)
-
-            if backward_and_step and (adv_train == None or _epoch < start_pgd_epoch ):
+            _, _input, _soft_label, hapi_label = data
+            ori_img = None
+            ori_soft = None
+            _input = _input.cuda()
+            _soft_label = _soft_label.cuda()
+            hapi_label = hapi_label.cuda()
+            _output = forward_fn(_input)
+            if hapi_label_train:
+                loss = loss_fn(_label=hapi_label, _output=_output)
+            else:
+                loss = loss_fn(_soft_label=_soft_label, _output=_output)    
+            if backward_and_step:
                 optimizer.zero_grad()
                 loss.backward()
-                # if adv_train:
-                #     _adv_soft_label, _adv_hapi_label = after_loss_fn(_input=_input,_soft_label=_soft_label,_output=_output,optimizer=optimizer)
 
                 if grad_clip is not None:
                     nn.utils.clip_grad_norm_(params, grad_clip)
                 optimizer.step()
 
-                # TODO 计算区别评估
+           
 
             if lr_scheduler and lr_scheduler_freq == 'iter':
                 lr_scheduler.step()
 
-            if mixmatch or encoder_train:
-                logger.update(n=batch_size, loss=float(loss))
-            else:
-                match task:
-                    case 'sentiment':
-                        _output = _output[:, :2]
-                        new_num_classes = 2
-                    case 'emotion':
-                        new_num_classes = num_classes
-                    case 'cifar10':
-                        new_num_classes = num_classes
 
                 hapi_acc1, hapi_acc5 = accuracy_fn(
-                    _output, hapi_label, num_classes=new_num_classes, topk=(1, 5))
-                gt_acc1, gt_acc5 = accuracy_fn(
-                    _output, _label, num_classes=new_num_classes, topk=(1, 5))
-                batch_size = int(_label.size(0))
-                logger.update(n=batch_size, gt_acc1=gt_acc1,
-                              hapi_loss=float(loss), hapi_acc1=hapi_acc1)
+                    _output, hapi_label, num_classes=num_classes, topk=(1, 5))
+                batch_size = int(hapi_label.size(0))
+                logger.update(n=batch_size, hapi_loss=float(loss), hapi_acc1=hapi_acc1)
         optimizer.zero_grad()
-
-        if adv_train:
-            if _epoch == start_pgd_epoch:
-                Synthetic_adv_x = adv_x_list
-                Synthetic_adv_soft_label = adv_soft_label_list
-            elif _epoch > start_pgd_epoch and Synthetic_adv_x.shape[0] != 0:
-                n = Synthetic_adv_x.size(0)  # Total number of samples
-                num_batches = (n + batch_size - 1) // batch_size  # Calculate number of batches
-
-                for i in range(num_batches):
-                    start_idx = i * batch_size
-                    end_idx = (i + 1) * batch_size
-                    input_batch = Synthetic_adv_x[start_idx:end_idx]
-                    target_batch = Synthetic_adv_soft_label[start_idx:end_idx]
-                    optimizer.zero_grad()
-                    if hapi_label_train:
-                        loss = loss_fn(_label=torch.argmax(target_batch,dim=-1), _output=forward_fn(input_batch))
-                    else:
-                        loss = loss_fn( _soft_label=target_batch, _output=forward_fn(input_batch))
-                    loss.backward()
-                    if grad_clip is not None:
-                        nn.utils.clip_grad_norm_(params, grad_clip)
-                    optimizer.step()
-                Synthetic_adv_x = torch.cat((Synthetic_adv_x,adv_x_list),dim=0)
-                Synthetic_adv_soft_label = torch.cat((Synthetic_adv_soft_label,adv_soft_label_list),dim=0)
-       
-        if adaptive == 'entropy' and _epoch % 2 == 0 and sample_times != 0:
-            # -------
-            sample_times -= 1
-            unlabel_dataset = Subset(RAFDB(input_directory=os.path.join('/data/jc/data/image/RAFDB', "train"),
-                                           hapi_data_dir=hapi_data_dir, hapi_info=hapi_info, api=api),
-                                     unlabel_dataset_indices)
-            # unlabel_dataset = Subset(KDEF(input_directory=os.path.join('/data/jc/data/image/KDEF_and_AKDEF/KDEF_spilit',"train"),
-            #                      hapi_data_dir=hapi_data_dir,hapi_info=hapi_info,api=api),unlabel_dataset_indices)
-            
-
-            unlabel_dataloader = DataLoader(dataset=unlabel_dataset,
-                                            batch_size=batch_size,
-                                            num_workers=num_workers, drop_last=True)
-            unlabel_iterator = itertools.cycle(unlabel_dataloader)
-
-            for i in range(int(len(unlabel_dataset_indices) / batch_size)):
-                inputs_u, _, _, _ = next(unlabel_iterator)
-                inputs_u = inputs_u.cuda()
-                with torch.no_grad():
-                    outputs_u = forward_fn(inputs_u)
-                    if i == 0:
-                        outputs_u_total = outputs_u
-                    else:
-                        outputs_u_total = torch.cat((outputs_u_total, outputs_u), 0)
-            # get the data indices which is need to label
-            if _epoch == 2:
-                new_label_indices = entropy(outputs_u_total, unlabel_dataset_indices, n_samples)
-            else:
-                new_label_indices = torch.cat((new_label_indices, entropy(
-                    outputs_u_total, unlabel_dataset_indices, n_samples)), 0)
-            unlabel_dataset_indices = np.setdiff1d(unlabel_dataset_indices, new_label_indices.numpy())
-
-            new_label_dataset = Subset(RAFDB(input_directory=os.path.join('/data/jc/data/image/RAFDB', "train"), hapi_data_dir=hapi_data_dir, hapi_info=hapi_info, api=api),
-                                       new_label_indices)
-            # new_label_dataset = Subset(KDEF(input_directory=os.path.join('/data/jc/data/image/KDEF_and_AKDEF/KDEF_spilit', "train"), hapi_data_dir=hapi_data_dir, hapi_info=hapi_info, api=api),
-            #                            new_label_indices)
-            # unlabel_dataset = Subset(RAFDB(input_directory=os.path.join('/data/jc/data/image/RAFDB',"train"),hapi_data_dir=hapi_data_dir,hapi_info=hapi_info,api=api),
-            #                             unlabel_dataset_indices)
-        if new_label_indices is not None:
-            print("new_label_indices: ", len(new_label_indices),
-                  "unlabel_dataset_indices: ", len(unlabel_dataset_indices))
-
-            if balance:
-                sampler = get_sampler_fn(new_label_dataset)
-                shuffle = False
-            else:
-                sampler = None
-                shuffle = True
-            new_label_dataloader = DataLoader(dataset=new_label_dataset,
-                                              batch_size=batch_size,
-                                              shuffle=shuffle, sampler=sampler,
-                                              num_workers=num_workers, drop_last=True)
-            new_label_iterator = itertools.cycle(new_label_dataloader)
-
-            for i in range(int(len(new_label_indices) / batch_size)):
-                _input, _label, _soft_label, hapi_label = next(new_label_iterator)
-                _input = _input.cuda()
-                _soft_label = _soft_label.cuda()
-                _label = _label.cuda()
-                hapi_label = hapi_label.cuda()
-                _output = forward_fn(_input)
-                if label_train:
-                    loss = loss_fn(_label=_label, _output=_output)
-                elif hapi_label_train:
-                    loss = loss_fn(_label=hapi_label, _output=_output)
-                else:
-                    loss = loss_fn(_soft_label=_soft_label, _output=_output)
-                if backward_and_step:
-                    optimizer.zero_grad()
-                    loss.backward()
-                    if grad_clip is not None:
-                        nn.utils.clip_grad_norm_(params, grad_clip)
-                    optimizer.step()
-            # -------
 
         if lr_scheduler and lr_scheduler_freq == 'epoch':
             lr_scheduler.step()
         if change_train_eval:
             module.eval()
         activate_params(module, [])
-        if mixmatch or encoder_train:
-            loss = (logger.meters['loss'].global_avg)
-            if writer is not None:
-                writer.add_scalars(main_tag='loss/' + main_tag,
-                                   tag_scalar_dict={tag: loss}, global_step=_epoch + start_epoch)
-        else:
-            gt_acc1, hapi_loss, hapi_acc1 = (
-                logger.meters['gt_acc1'].global_avg,
-                logger.meters['hapi_loss'].global_avg,
-                logger.meters['hapi_acc1'].global_avg)
-            if writer is not None:
-                writer.add_scalars(main_tag='gt_acc1/' + main_tag,
-                                   tag_scalar_dict={tag: gt_acc1}, global_step=_epoch + start_epoch)
-                writer.add_scalars(main_tag='hapi_loss/' + main_tag,
-                                   tag_scalar_dict={tag: hapi_loss}, global_step=_epoch + start_epoch)
-                writer.add_scalars(main_tag='hapi_acc1/' + main_tag,
-                                   tag_scalar_dict={tag: hapi_acc1}, global_step=_epoch + start_epoch)
 
-        if adv_train:
-            attack_succ = logger.meters['attack_succ'].global_avg
-            ahapi_succ = logger.meters['ahapi_succ'].global_avg
-            if writer is not None:
-                writer.add_scalars(main_tag='attack_succ/' + main_tag,
-                                   tag_scalar_dict={tag: attack_succ}, global_step=_epoch + start_epoch)
-                writer.add_scalars(main_tag='ahapi_succ/' + main_tag,
-                                   tag_scalar_dict={tag: ahapi_succ}, global_step=_epoch + start_epoch)
+        hapi_loss, hapi_acc1 = (
+            logger.meters['hapi_loss'].global_avg,
+            logger.meters['hapi_acc1'].global_avg)
+        if writer is not None:
+            
+            writer.add_scalars(main_tag='hapi_loss/' + main_tag,
+                                tag_scalar_dict={tag: hapi_loss}, global_step=_epoch + start_epoch)
+            writer.add_scalars(main_tag='hapi_acc1/' + main_tag,
+                                tag_scalar_dict={tag: hapi_acc1}, global_step=_epoch + start_epoch)
+
 
         if validate_interval != 0 and (_epoch % validate_interval == 0 or _epoch == epochs):
             validate_result = validate_fn(module=module,
@@ -1227,32 +733,19 @@ def distillation(module: nn.Module, pgd_set, num_classes: int,
                                           hapi_label_train=hapi_label_train, encoder_train=encoder_train,
                                           api=api, task=task, after_loss_fn=after_loss_fn, adv_valid=adv_valid, tea_model=tea_model,
                                           **kwargs)
-            if encoder_train:
-                cur_loss = validate_result
-                if cur_loss >= best_loss:
-                    best_validate_result = validate_result
+            
+            cur_acc = validate_result[0]
+            if cur_acc >= best_acc:
+                best_validate_result = validate_result
                 if verbose:
                     prints('{purple}best result update!{reset}'.format(
                         **ansi), indent=indent)
-                    prints(f'Current Acc: {cur_loss:.3f}    '
-                           f'Previous Best Acc: {best_loss:.3f}',
-                           indent=indent)
-                best_loss = cur_loss
+                    prints(f'Current Acc: {cur_acc:.3f}    '
+                            f'Previous Best Acc: {best_acc:.3f}',
+                            indent=indent)
+                best_acc = cur_acc
                 if save:
                     save_fn(log_dir=log_dir, module=module, verbose=verbose)
-            else:
-                cur_acc = validate_result[0]
-                if cur_acc >= best_acc:
-                    best_validate_result = validate_result
-                    if verbose:
-                        prints('{purple}best result update!{reset}'.format(
-                            **ansi), indent=indent)
-                        prints(f'Current Acc: {cur_acc:.3f}    '
-                               f'Previous Best Acc: {best_acc:.3f}',
-                               indent=indent)
-                    best_acc = cur_acc
-                    if save:
-                        save_fn(log_dir=log_dir, module=module, verbose=verbose)
             if verbose:
                 prints('-' * 50, indent=indent)
     module.zero_grad()
