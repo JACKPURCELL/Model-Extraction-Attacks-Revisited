@@ -168,7 +168,7 @@ if args.log_dir is None:
     if args.lr_scheduler:
         log_dir += "_lrsche"
 else:
-    log_dir = 'exp_adp/'+args.log_dir
+    log_dir = 'exp_model/'+args.log_dir
     
 if 'resnet' in args.model:
     model = getattr(models,'resnet')(norm_par=train_dataset.norm_par,model_name=args.model,num_classes=args.num_classes)
@@ -180,6 +180,14 @@ elif 'roberta' in args.model:
     model = getattr(models,'roberta')(model_name=args.model,num_classes=args.num_classes)
 elif 'vgg' in args.model:
     model = getattr(models,'vgg')(norm_par=train_dataset.norm_par,model_name=args.model,num_classes=args.num_classes)
+elif 'efficientnet' in args.model:
+    model = getattr(models,'efficientnet')(norm_par=train_dataset.norm_par,model_name=args.model,num_classes=args.num_classes)
+elif 'alexnet' in args.model:
+    model = getattr(models,'alexnet')(norm_par=train_dataset.norm_par,model_name=args.model,num_classes=args.num_classes)
+elif 'googlenet' in args.model:
+    model = getattr(models,'googlenet')(norm_par=train_dataset.norm_par,model_name=args.model,num_classes=args.num_classes)
+elif 'densenet' in args.model:
+    model = getattr(models,'densenet')(norm_par=train_dataset.norm_par,model_name=args.model,num_classes=args.num_classes)
 elif 'autoencoder' in args.model:
     model = getattr(models,'autoencoder')(norm_par=train_dataset.norm_par)
 if args.api == 'cifar10': 
