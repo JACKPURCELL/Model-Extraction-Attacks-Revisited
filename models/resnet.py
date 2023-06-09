@@ -46,7 +46,7 @@ class ResNet(nn.Module):
             ModelClass = getattr(torchvision.models, 'resnet50')
             _model = ModelClass(weights='DEFAULT').cuda()
             _model.fc = nn.Linear(in_features=_model.fc.in_features, out_features=8631,bias=True).cuda()
-            self.load_state_dict('/home/jkl6486/hermes/resnet50_ft_weight.pkl')
+            _model = self.load_state_dict(_model,'/home/jkl6486/hermes/resnet50_ft_weight.pkl')
         elif model_name == 'resnet50_raw':
             ModelClass = getattr(torchvision.models, model_name)
             _model = ModelClass().cuda()
@@ -77,7 +77,7 @@ class ResNet(nn.Module):
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1)).cuda()
         self.embedding_recorder = EmbeddingRecorder(record_embedding).cuda()
 
-    def load_state_dict(self, fname):
+    def load_state_dict(self, _model,fname):
         """
         Set parameters converted from Caffe models authors of VGGFace2 provide.
         See https://www.robots.ox.ac.uk/~vgg/data/vgg_face2/.
@@ -88,7 +88,7 @@ class ResNet(nn.Module):
         with open(fname, 'rb') as f:
             weights = pickle.load(f, encoding='latin1')
 
-        own_state = self.model.state_dict()
+        own_state = _model.state_dict()
         for name, param in weights.items():
             if name in own_state:
                 try:
@@ -98,6 +98,8 @@ class ResNet(nn.Module):
                                     'dimensions in the checkpoint are {}.'.format(name, own_state[name].size(), param.size()))
             else:
                 raise KeyError('unexpected key "{}" in state_dict'.format(name))
+        _model.load_state_dict(own_state)
+        return _model
         
     def forward(self, x):
         if self.norm_par is not None:
