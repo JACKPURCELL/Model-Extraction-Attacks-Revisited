@@ -648,7 +648,34 @@ def distillation(module: nn.Module, pgd_set, num_classes: int,
                 adv_dataset = advdataset(Synthetic_x.cpu(),Synthetic_adv_x.cpu(), Synthetic_adv_soft_label.cpu(),Synthetic_adv_hapi_label.cpu())
                 loader_train = torch.utils.data.DataLoader(adv_dataset, batch_size=batch_size, shuffle=True,
                                                         num_workers=workers, pin_memory=True,drop_last=False)
-                
+        elif adaptive == 'random':
+            if sample_times != 0 and (_epoch+1) %2 ==0:
+                loader_train = None
+                sample_times -= 1
+                new_index = np.arange(len(train_dataset))[~np.in1d(np.arange(len(train_dataset)),already_selected)]
+                selection_result = np.random.choice(new_index,n_samples,replace=False)
+                already_selected.extend(selection_result)
+                print("new_index",new_index.shape,"  already_selected",len(already_selected))
+                #the clean input need to query in this epoch
+                dst_subset = torch.utils.data.Subset(train_dataset, selection_result)
+                loader_dst = torch.utils.data.DataLoader(dst_subset, batch_size=batch_size, shuffle=False,
+                                                        num_workers=workers, pin_memory=True,drop_last=False)
+
+                for i,data in enumerate(loader_dst):
+                    input_batch, _label, _soft_label, hapi_label= data
+                    if i == 0 and _epoch == 1:
+                        Synthetic_x = input_batch
+                        Synthetic_adv_x = input_batch
+                        Synthetic_adv_soft_label = _soft_label
+                        Synthetic_adv_hapi_label = hapi_label
+                    else:
+                        Synthetic_x = torch.cat((Synthetic_x,input_batch),dim=0) 
+                        Synthetic_adv_x = torch.cat((Synthetic_adv_x,input_batch),dim=0) 
+                        Synthetic_adv_soft_label = torch.cat((Synthetic_adv_soft_label,_soft_label),dim=0)  
+                        Synthetic_adv_hapi_label = torch.cat((Synthetic_adv_hapi_label,hapi_label),dim=0)  
+                adv_dataset = advdataset(Synthetic_x.cpu(),Synthetic_adv_x.cpu(), Synthetic_adv_soft_label.cpu(),Synthetic_adv_hapi_label.cpu())
+                loader_train = torch.utils.data.DataLoader(adv_dataset, batch_size=batch_size, shuffle=True,
+                                                        num_workers=workers, pin_memory=True,drop_last=False)
                
             
             
@@ -1509,3 +1536,72 @@ def train_validate(module: nn.Module, num_classes: int,
                            tag_scalar_dict={tag: hapi_acc1}, global_step=_epoch)
 
     return hapi_acc1, hapi_loss
+
+
+
+def validate(module: nn.Module, pgd_set, num_classes: int,
+                 epochs: int, optimizer, lr_scheduler, adv_train=None, adv_train_iter=7, adv_valid=False,
+                 log_dir: str = 'runs/test',
+                 grad_clip: float = 5.0,
+                 print_prefix: str = 'Distill', start_epoch: int = 0, resume: int = 0,
+                 validate_interval: int = 1, save: bool = True,
+                 loader_train: torch.utils.data.DataLoader = None,
+                 loader_valid: torch.utils.data.DataLoader = None,
+                 unlabel_iterator=None,
+                 file_path: str = None,
+                 folder_path: str = None, suffix: str = None,
+                 main_tag: str = 'train', tag: str = '',
+
+                 verbose: bool = True, output_freq: str = 'iter', indent: int = 0,
+                 change_train_eval: bool = True, lr_scheduler_freq: str = 'epoch',
+                 backward_and_step: bool = True,
+                 mixmatch: bool = False, label_train: bool = False, hapi_label_train: bool = False,
+                 api=False, task='sentiment', unlabel_dataset_indices=None,
+                 hapi_data_dir=None, hapi_info=None,
+                 batch_size=None, num_workers=None,
+                 n_samples=None, adaptive=None, get_sampler_fn=None,
+                 balance=False, sample_times=10, tea_model=None, AE=None, encoder_attack=False,
+                 pgd_percent=None,
+                 encoder_train=False,train_dataset=None,
+                workers=8,
+                 **kwargs):
+    r"""Train the model"""
+    start_pgd_epoch = 1
+    end_pgd_epoch = 30
+    
+    if epochs <= 0:
+        return
+    after_loss_fn = None
+    forward_fn = module.__call__
+    already_selected = []
+    
+
+    writer = SummaryWriter(log_dir=log_dir)
+    validate_fn = dis_validate
+
+    scaler: torch.cuda.amp.GradScaler = None
+
+    best_validate_result = (0.0, float('inf'))
+    best_acc = 0.0
+    best_loss = 100.0
+    
+    best_validate_result = (0.0, float('inf'))
+    best_acc = 0.0
+    best_loss = 100.0
+    if validate_interval != 0:
+        validate_result = validate_fn(module=module,
+                                    num_classes=num_classes,
+                                    loader=loader_valid,
+                                    writer=writer, tag=tag,
+                                    _epoch=start_epoch,
+                                    verbose=verbose, indent=indent,
+                                    label_train=label_train,
+                                          hapi_label_train=hapi_label_train, encoder_train=encoder_train,
+                                    api=api,task=task,after_loss_fn=after_loss_fn,adv_valid=adv_valid, tea_model=tea_model,
+                                    **kwargs)
+         
+        best_acc = best_validate_result[0]
+    
+   
+    print('best_validate_result', best_validate_result)
+    return best_validate_result

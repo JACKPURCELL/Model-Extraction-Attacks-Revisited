@@ -39,20 +39,22 @@ from torchvision import transforms
         #                    help='sgm gamma (default: 1.0)')
 class ResNet(nn.Module):
 
-    def __init__(self, norm_par=None,model_name: str = 'resnet50',record_embedding=False,num_classes=7):
+    def __init__(self, norm_par=None,model_name: str = 'resnet50',record_embedding=False,num_classes=7,path=None):
 
         super(ResNet, self).__init__() 
         if model_name == 'resnet50_vggface2':
             ModelClass = getattr(torchvision.models, 'resnet50')
             _model = ModelClass(weights='DEFAULT').cuda()
             _model.fc = nn.Linear(in_features=_model.fc.in_features, out_features=8631,bias=True).cuda()
-            _model = self.load_state_dict(_model,'/home/jkl6486/hermes/resnet50_ft_weight.pkl')
+            _model = self.load_state_dict_vgg(_model,'/home/jkl6486/hermes/resnet50_ft_weight.pkl')
         elif model_name == 'resnet50_raw':
             ModelClass = getattr(torchvision.models, 'resnet50')
             _model = ModelClass().cuda()
         else:
             ModelClass = getattr(torchvision.models, model_name)
             _model = ModelClass(weights='DEFAULT').cuda()
+
+            
        
         if norm_par is not None:
             self.norm_par = norm_par
@@ -76,8 +78,10 @@ class ResNet(nn.Module):
         self.classifier = nn.Sequential(OrderedDict(module_list)).cuda()
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1)).cuda()
         self.embedding_recorder = EmbeddingRecorder(record_embedding).cuda()
+        if path is not None:
+            self.load_state_dict(path)
 
-    def load_state_dict(self, _model,fname):
+    def load_state_dict_vgg(self, _model,fname):
         """
         Set parameters converted from Caffe models authors of VGGFace2 provide.
         See https://www.robots.ox.ac.uk/~vgg/data/vgg_face2/.
@@ -98,8 +102,47 @@ class ResNet(nn.Module):
                                     'dimensions in the checkpoint are {}.'.format(name, own_state[name].size(), param.size()))
             else:
                 raise KeyError('unexpected key "{}" in state_dict'.format(name))
-        _model.load_state_dict(own_state)
+
         return _model
+    
+    def load_state_dict(self, fname):
+        """
+        Set parameters converted from Caffe models authors of VGGFace2 provide.
+        See https://www.robots.ox.ac.uk/~vgg/data/vgg_face2/.
+        Arguments:
+            model: model
+            fname: file name of parameters converted from a Caffe model, assuming the file format is Pickle.
+        """
+
+        weights = torch.load(fname)
+
+        own_state = self.features.state_dict()
+        for name, param in weights.items():
+            if 'features' in name:
+                name = name.split('features.')[1]
+                if name in own_state:
+                    try:
+                        own_state[name].copy_(param)
+                    except Exception:
+                        raise RuntimeError('While copying the parameter named {}, whose dimensions in the model are {} and whose '\
+                                        'dimensions in the checkpoint are {}.'.format(name, own_state[name].size(), param.size()))
+                else:
+                    raise KeyError('unexpected key "{}" in state_dict'.format(name))
+
+        own_state = self.classifier.state_dict()
+        for name, param in weights.items():
+            if 'classifier' in name:
+                name = name.split('classifier.')[1]
+                if name in own_state:
+                    try:
+                        own_state[name].copy_(param)
+                    except Exception:
+                        raise RuntimeError('While copying the parameter named {}, whose dimensions in the model are {} and whose '\
+                                        'dimensions in the checkpoint are {}.'.format(name, own_state[name].size(), param.size()))
+                else:
+                    raise KeyError('unexpected key "{}" in state_dict'.format(name))
+            
+
         
     def forward(self, x):
         if self.norm_par is not None:

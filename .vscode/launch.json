@@ -199,7 +199,22 @@
             "env":{
                 "CUDA_VISIBLE_DEVICES":"0"
             },
-            "args":["--optimizer","Lion","--epochs","200","--adv_train","pgd","--log_dir","test1_pgd","--n_sample","64","--sample_times","37","--lr_warmup_epoch","75","--adaptive","cloudleak","--batch_size","64","--model","resnet50","--lr","3e-4","--op_parameters","full","--validate_interval","1","--num_classes","7","--dataset","kdef","--lr_scheduler","--save","--api","facepp"
+            "args":["--optimizer","Lion","--epochs","200","--adv_train","pgd","--log_dir","aaa","--n_sample","64","--sample_times","37","--lr_warmup_epoch","75","--adaptive","random","--batch_size","64","--model","resnet50","--lr","3e-4","--op_parameters","full","--validate_interval","1","--num_classes","7","--dataset","kdef","--lr_scheduler","--save","--api","facepp"
+        ]
+
+        },
+        {
+            "name": "cloud_leak_pgd_validate.py",
+            "type": "python",
+            "request": "launch",
+            "program": "cloudleak_vali.py",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "cwd": "/home/jkl6486/hermes",
+            "env":{
+                "CUDA_VISIBLE_DEVICES":"0"
+            },
+            "args":["--model_path","/home/jkl6486/hermes/exp_model/7_23_b64_lion_resnet50_raw_1688_e4/model.pth","--optimizer","Lion","--epochs","200","--adv_train","pgd","--log_dir","aaa","--n_sample","64","--sample_times","37","--lr_warmup_epoch","75","--adaptive","cloudleak","--batch_size","64","--model","resnet50","--lr","3e-4","--op_parameters","full","--validate_interval","1","--num_classes","7","--dataset","rafdb","--lr_scheduler","--save","--api","facepp"
         ]
 
         },
