@@ -48,7 +48,7 @@ class ResNet(nn.Module):
             _model.fc = nn.Linear(in_features=_model.fc.in_features, out_features=8631,bias=True).cuda()
             _model = self.load_state_dict(_model,'/home/jkl6486/hermes/resnet50_ft_weight.pkl')
         elif model_name == 'resnet50_raw':
-            ModelClass = getattr(torchvision.models, model_name)
+            ModelClass = getattr(torchvision.models, 'resnet50')
             _model = ModelClass().cuda()
         else:
             ModelClass = getattr(torchvision.models, model_name)
