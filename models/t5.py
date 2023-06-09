@@ -1,5 +1,5 @@
 
-from transformers import RobertaTokenizer, RobertaModel
+from transformers import T5Tokenizer, T5ForConditionalGeneration
 
 #!/usr/bin/env python3
 
@@ -23,38 +23,40 @@ from collections.abc import Iterable
 from optimizer.lion import Lion
 
 
-class ROBERTA(nn.Module):
+class t5(nn.Module):
 
-    def __init__(self, model_name: str = 'roberta-large', num_classes=2, **kwargs):
-        super(ROBERTA, self).__init__()
+    def __init__(self, model_name: str = 't5-base', num_classes=2, **kwargs):
+        super(t5, self).__init__()
 
 
-        self.model = RobertaModel.from_pretrained(model_name,num_labels=num_classes).cuda()
-        self.model_name ='roberta'
-        in_features = 1024 if 'large' in model_name else 768
-        self.tokenizer = RobertaTokenizer.from_pretrained(model_name)
-        module_list: list[nn.Module] = []
-        module_list.extend([('first_dropout',nn.Identity()),
-                            ('last_dropout',nn.Dropout(p=0.1, inplace=False)),
-                            ('logits_proj',nn.Linear(in_features=in_features, out_features=num_classes, bias=True).cuda())])
-        self.classifier = nn.Sequential(OrderedDict(module_list))
+        self.model = T5ForConditionalGeneration.from_pretrained(model_name,num_labels=num_classes).cuda()
+        self.model_name ='t5'
+        if 'base' in model_name:
+            in_features = 768
+        elif 'large' in model_name:
+            in_features = 1024
+        elif 'small' in model_name:
+            in_features = 512
         
+        self.tokenizer = T5Tokenizer.from_pretrained(model_name)
+    
+        self.model.lm_head = nn.Linear(in_features=in_features, out_features=num_classes, bias=True).cuda()
         
     def forward(self, input_ids,attention_mask):
 
-        output = self.model(input_ids=input_ids,attention_mask=attention_mask).pooler_output
-        return self.classifier(output)
+        return self.model(input_ids=input_ids,attention_mask=attention_mask).logits
+    
     
         
     def define_optimizer(
-            self, total_iters,parameters: str | Iterator[nn.Parameter] = 'partial',
+            self, parameters: str | Iterator[nn.Parameter] = 'partial',
             OptimType: str | type[Optimizer] = 'Lion',
             lr: float = 3e-6, custom_lr: float = 1e-3, momentum: float = 0.0, weight_decay: float = 0.0,
             lr_scheduler: bool = False,
-            lr_scheduler_type: str = 'LinearLR',
+            lr_scheduler_type: str = 'CosineAnnealingLR',
             lr_step_size: int = 30, lr_gamma: float = 0.1,
             epochs: int = None, lr_min: float = 0.0,
-            lr_warmup_percent: float = 0.0, lr_warmup_method: str = 'linear',
+            lr_warmup_percent: float = 0.0, lr_warmup_method: str = 'constant',
             lr_warmup_decay: float = 0.01,
             betas = (0.95, 0.98),
             eps = 1e-8,
@@ -122,36 +124,32 @@ class ROBERTA(nn.Module):
                 OptimType: type[Optimizer] = getattr(torch.optim, OptimType)
         match parameters:
             case 'classifier' | 'partial':
-                bert_identifiers = ['embeddings','encoder']
-                no_weight_decay_identifiers = ['bias', 'LayerNorm.weight']
-                grouped_model_parameters = [
-                        {'params': [param for name, param in self.model.named_parameters()
-                                    if any(identifier in name for identifier in bert_identifiers) and
-                                    not any(identifier_ in name for identifier_ in no_weight_decay_identifiers)],
-                        'lr': lr,
-                        'betas': betas,
-                        'weight_decay': weight_decay,
-                        'eps': eps},
-                        {'params': [param for name, param in self.model.named_parameters()
-                                    if any(identifier in name for identifier in bert_identifiers) and
-                                    any(identifier_ in name for identifier_ in no_weight_decay_identifiers)],
-                        'lr': lr,
-                        'betas': betas,
-                        'weight_decay': 0.0,
-                        'eps': eps},
-                        {'params': [param for name, param in self.model.named_parameters()
-                                    if not any(identifier in name for identifier in bert_identifiers)],
-                        'lr': custom_lr,
-                        'betas': betas,
-                        'weight_decay': 0.0,
-                        'eps': eps},
-                        {'params': [param for name, param in self.classifier.named_parameters()],
-                        'lr': custom_lr,
-                        'betas': betas,
-                        'weight_decay': 0.0,
-                        'eps': eps}
-                ]
-                optimizer = OptimType(grouped_model_parameters)
+                pass
+                # bert_identifiers = ['transformer']
+                # no_weight_decay_identifiers = ['bias', 'layer_norm.weight']
+                # grouped_model_parameters = [
+                #         {'params': [param for name, param in self.model.named_parameters()
+                #                     if any(identifier in name for identifier in bert_identifiers) and
+                #                     not any(identifier_ in name for identifier_ in no_weight_decay_identifiers)],
+                #         'lr': lr,
+                #         'betas': betas,
+                #         'weight_decay': weight_decay,
+                #         'eps': eps},
+                #         {'params': [param for name, param in self.model.named_parameters()
+                #                     if any(identifier in name for identifier in bert_identifiers) and
+                #                     any(identifier_ in name for identifier_ in no_weight_decay_identifiers)],
+                #         'lr': lr,
+                #         'betas': betas,
+                #         'weight_decay': 0.0,
+                #         'eps': eps},
+                #         {'params': [param for name, param in self.model.named_parameters()
+                #                     if not any(identifier in name for identifier in bert_identifiers)],
+                #         'lr': custom_lr,
+                #         'betas': betas,
+                #         'weight_decay': 0.0,
+                #         'eps': eps}
+                # ]
+                # optimizer = OptimType(grouped_model_parameters)
             case 'full':
                 kwargs['momentum'] = momentum
                 kwargs['weight_decay'] = weight_decay
@@ -159,14 +157,12 @@ class ROBERTA(nn.Module):
                 kwargs['eps'] = eps
                 keys = OptimType.__init__.__code__.co_varnames
                 kwargs = {k: v for k, v in kwargs.items() if k in keys}
-                params = list(self.model.parameters())
-                params.extend(list(self.classifier.parameters()))
+                params = self.model.parameters()
                 optimizer = OptimType(params, lr, **kwargs)
 
         _lr_scheduler: _LRScheduler = None
         
-        lr_warmup_iters = int(total_iters * 0.06)
-        decay_iters = total_iters - lr_warmup_iters
+        lr_warmup_epochs = int(epochs * lr_warmup_percent)
         
         if lr_scheduler:
             main_lr_scheduler: _LRScheduler
@@ -174,31 +170,27 @@ class ROBERTA(nn.Module):
                 case 'StepLR':
                     main_lr_scheduler = torch.optim.lr_scheduler.StepLR(
                         optimizer, step_size=lr_step_size, gamma=lr_gamma)
-                # case 'CosineAnnealingLR':
-                #     main_lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-                #         optimizer, T_max=epochs - lr_warmup_epochs, eta_min=lr_min)
+                case 'CosineAnnealingLR':
+                    main_lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+                        optimizer, T_max=epochs - lr_warmup_epochs, eta_min=lr_min)
                 case 'ExponentialLR':
                     main_lr_scheduler = torch.optim.lr_scheduler.ExponentialLR(
                         optimizer, gamma=lr_gamma)
-                case 'LinearLR':
-                    main_lr_scheduler = torch.optim.lr_scheduler.LinearLR(
-                        optimizer, start_factor=1.0, end_factor=0, total_iters=decay_iters, last_epoch=-1)
                 case _:
                     raise NotImplementedError(
                         f'Invalid {lr_scheduler_type=}.'
                         'Only "StepLR", "CosineAnnealingLR" and "ExponentialLR" '
                         'are supported.')
-            if lr_warmup_iters > 0:
+            if lr_warmup_epochs > 0:
                 match lr_warmup_method:
                     case 'linear':
                         warmup_lr_scheduler = torch.optim.lr_scheduler.LinearLR(
                             optimizer, start_factor=lr_warmup_decay,
-                            total_iters=lr_warmup_iters)
-                        #lr_warmup_epochs
+                            total_iters=lr_warmup_epochs)
                     case 'constant':
                         warmup_lr_scheduler = torch.optim.lr_scheduler.ConstantLR(
                             optimizer, factor=lr_warmup_decay,
-                            total_iters=lr_warmup_iters)
+                            total_iters=lr_warmup_epochs)
                     case _:
                         raise NotImplementedError(
                             f'Invalid {lr_warmup_method=}.'
@@ -206,7 +198,7 @@ class ROBERTA(nn.Module):
                 _lr_scheduler = torch.optim.lr_scheduler.SequentialLR(
                     optimizer,
                     schedulers=[warmup_lr_scheduler, main_lr_scheduler],
-                    milestones=[lr_warmup_iters])
+                    milestones=[lr_warmup_epochs])
             else:
                 _lr_scheduler = main_lr_scheduler
         return optimizer, _lr_scheduler

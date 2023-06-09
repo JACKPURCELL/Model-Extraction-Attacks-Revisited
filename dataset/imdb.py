@@ -218,6 +218,6 @@ class IMDB(Dataset):
                 soft_label = torch.zeros(3)
                 soft_label[int(hapi_label)] = hapi_confidence
                 soft_label[2] = other_confidence
-        if 'roberta' in self.tokenizer.name_or_path:
+        if 'roberta' in self.tokenizer.name_or_path or 't5' in self.tokenizer.name_or_path:
             return example.input_ids[0], example.attention_mask[0], label, soft_label, hapi_label
         return example.input_ids[0], example.token_type_ids[0], example.attention_mask[0], label, soft_label, hapi_label

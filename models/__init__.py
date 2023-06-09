@@ -10,3 +10,4 @@ from .alexnet import alexnet as alexnet
 from .efficientnet import efficientnet as efficientnet
 from .googlenet import googlenet as googlenet
 from .densenet import densenet as densenet
+from .t5 import t5 as t5

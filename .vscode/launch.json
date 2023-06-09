@@ -203,6 +203,21 @@
         ]
 
         },
+        {
+            "name": "t5.py",
+            "type": "python",
+            "request": "launch",
+            "program": "main.py",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "cwd": "/home/jkl6486/hermes",
+            "env":{
+                "CUDA_VISIBLE_DEVICES":"0,1,2,3"
+            },
+            "args":["--optimizer","Lion","--epochs","4","--batch_size","64","--grad_clip","3.0","--model","t5-base","--lr","3e-4","--op_parameters","full","--validate_interval","1","--num_classes","3","--dataset","imdb","--lr_scheduler","--save","--log_dir","15_22_t5b_23_lion_e6_full","--api","microsoft","--validate_interval","1"
+        ]
+
+        },
 
     ]
 }

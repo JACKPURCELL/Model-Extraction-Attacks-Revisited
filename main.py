@@ -178,6 +178,8 @@ elif 'vit' in args.model:
     model = getattr(models,'vit')(norm_par=train_dataset.norm_par,model_name=args.model,num_classes=args.num_classes)
 elif 'roberta' in args.model:
     model = getattr(models,'roberta')(model_name=args.model,num_classes=args.num_classes)
+elif 't5' in args.model:
+    model = getattr(models,'t5')(model_name=args.model,num_classes=args.num_classes)
 elif 'vgg' in args.model:
     model = getattr(models,'vgg')(norm_par=train_dataset.norm_par,model_name=args.model,num_classes=args.num_classes)
 elif 'efficientnet' in args.model:
