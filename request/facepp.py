@@ -17,14 +17,14 @@ from tqdm import trange
 
 
 def detect_faces(dirpath,file):
-    if not os.path.exists(os.path.join(dirpath, 'facepp_api', file)):
+    if not os.path.exists(os.path.join('/data/jc/data/image/EXPW_224', 'facepp_api', file)):
         # print("quote")
         """Detects faces in an image."""
         path = os.path.join(dirpath, file)
 
         with io.open(path, 'rb') as image:
-            data = {'api_key':'0KHi8-QNz1qcDUSAzpcbCSQBfBL8GZPJ',
-            'api_secret':'0A_i8hjaXU4UqLbmpXKpj9qmEwzUqBn0',
+            data = {'api_key':'_5FIJ5HcL3L5IQTfEEmAvRYbjL6QzGWb',
+            'api_secret':'aEGVrumV8O0pACkQf-giP2R_3mcMTF9q',
             'image_base64':base64.b64encode(image.read()),
             'return_attributes':'emotion'}
             r = requests.post(url = 'https://api-us.faceplusplus.com/facepp/v3/detect', data = data)
@@ -52,30 +52,29 @@ def detect_faces(dirpath,file):
                 print('UNDETECTED')
                 data = json.dumps(data)
 
-            with open(os.path.join(dirpath, 'facepp_api', file), mode='w') as f:
+            with open(os.path.join('/data/jc/data/image/EXPW_224', 'facepp_api', file), mode='w') as f:
                 f.write(data)
            
             
 
-
+try:        
+    os.mkdir(os.path.join('/data/jc/data/image/EXPW_224', 'facepp_api'))
+except:
+    pass
 for label in range(7):
-    path = os.path.join('/data/jc/data/image/RAFDB/train', str(label))        
-    try:        
-        os.mkdir(os.path.join(path, 'facepp_api'))
+    # path = os.path.join('/data/jc/data/image/EXPW_224/train', str(label))        
+    # try:        
+    #     os.mkdir(os.path.join(path, 'facepp_api'))
 
-    except:
-        pass
-    files = [f for f in os.listdir(path)
-                        if os.path.isfile(os.path.join(path, f))]
-    for i in trange(len(files), desc='requesting facepp api', leave=True):        
-        detect_faces(path,files[i])        
+    # except:
+    #     pass
+    # files = [f for f in os.listdir(path)
+    #                     if os.path.isfile(os.path.join(path, f))]
+    # for i in trange(len(files), desc='requesting facepp api', leave=True):        
+    #     detect_faces(path,files[i])        
     
-    path = os.path.join('/data/jc/data/image/RAFDB/valid', str(label))
-    try:        
-        os.mkdir(os.path.join(path, 'facepp_api'))
+    path = os.path.join('/data/jc/data/image/EXPW_224/valid', str(label))
 
-    except:
-        pass
     files = [f for f in os.listdir(path)
                         if os.path.isfile(os.path.join(path, f))]
     for i in trange(len(files), desc='requesting facepp api', leave=True):        

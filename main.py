@@ -168,7 +168,7 @@ if args.log_dir is None:
     if args.lr_scheduler:
         log_dir += "_lrsche"
 else:
-    log_dir = 'exp_model/'+args.log_dir
+    log_dir = 'exp_mix/'+args.log_dir
     
 if 'resnet' in args.model:
     model = getattr(models,'resnet')(norm_par=train_dataset.norm_par,model_name=args.model,num_classes=args.num_classes)
@@ -229,27 +229,29 @@ def get_sampler(train_dataset):
     return WeightedRandomSampler(torch.DoubleTensor(weights), int(num_samples))
 
 unlabel_dataset_indices =None
-if args.unlabel_batch != -1:#mixmatch
-    _temp_dataset, _ = split_dataset(
+if args.mixmatch:#mixmatch
+    _label_dataset, _unlabel_dataset_indices = split_dataset(
         train_dataset,
-        length=(args.label_batch+args.unlabel_batch)*args.batch_size)
+        length=args.label_batch*args.batch_size,
+        same_distribution=True,num_classes=args.num_classes,
+        labels=train_dataset.targets)
     
     
-    _label_dataset, _temp_unlabel_dataset = split_dataset(
-        _temp_dataset,length=args.label_batch*args.batch_size)
+    # _label_dataset, _temp_unlabel_dataset = split_dataset(
+    #     _temp_dataset,length=args.label_batch*args.batch_size)
 
     if args.dataset == 'rafdb':
         _unlabel_dataset = Subset(RAFDB(input_directory=os.path.join('/data/jc/data/image/RAFDB',"train"),hapi_data_dir=args.hapi_data_dir,hapi_info=args.hapi_info,api=args.api,transform = 'mixmatch'),
-                                _temp_unlabel_dataset.indices)
+                                _unlabel_dataset_indices)
     elif args.dataset == 'kdef':
         _unlabel_dataset = Subset(KDEF(input_directory=os.path.join('/data/jc/data/image/KDEF_and_AKDEF/KDEF_spilit',"train"),hapi_data_dir=args.hapi_data_dir,hapi_info=args.hapi_info,api=args.api,transform = 'mixmatch'),
-                                _temp_unlabel_dataset.indices)
+                                _unlabel_dataset_indices)
     elif args.dataset == 'cifar10':
         _unlabel_dataset = Subset(CIFAR10(mode='train',transform = 'mixmatch'),
-                                _temp_unlabel_dataset.indices)
+                                _unlabel_dataset_indices)
     elif args.dataset == 'expw':
         _unlabel_dataset = Subset(EXPW(input_directory=os.path.join('/data/jc/data/image/EXPW_224',"train"),hapi_data_dir=args.hapi_data_dir,hapi_info=args.hapi_info,api=args.api,transform = 'mixmatch'),
-                                _temp_unlabel_dataset.indices)
+                                _unlabel_dataset_indices)
     else:
         raise NotImplementedError
     if args.balance:

@@ -106,7 +106,8 @@
             "env":{
                 "CUDA_VISIBLE_DEVICES":"0"
             },
-            "args":["--log_dir","--batch_size","256","--model","resnet50","--grad_clip","3.0","--lr","3e-5","--op_parameters","full","--validate_interval","1","--num_classes","7","--dataset","rafdb","--hapi_info","fer/rafdb/microsoft_fer/22-05-23","--mixmatch","--split_unlabel_percent","0.45","--split_label_percent","0.05"]
+            "args":["--optimizer","Lion","--epochs","200","--batch_size","64","--model","resnet50","--lr","3e-4","--op_parameters","full","--validate_interval","1","--num_classes","7","--dataset","expw","--lr_scheduler","--save","--weight_decay","0.0","--log_dir","mixmatch_test","--hapi_info","fer/expw/microsoft_fer/22-05-23","--label_batch","32","--unlabel_batch","32","--mixmatch","--seed","1688","--validate_interval","20"
+        ]
 
 
         },
@@ -214,7 +215,7 @@
             "env":{
                 "CUDA_VISIBLE_DEVICES":"0"
             },
-            "args":["--model_path","/home/jkl6486/hermes/exp_model/7_23_b64_lion_resnet50_raw_1688_e4/model.pth","--optimizer","Lion","--epochs","200","--adv_train","pgd","--log_dir","aaa","--n_sample","64","--sample_times","37","--lr_warmup_epoch","75","--adaptive","cloudleak","--batch_size","64","--model","resnet50","--lr","3e-4","--op_parameters","full","--validate_interval","1","--num_classes","7","--dataset","rafdb","--lr_scheduler","--save","--api","facepp"
+            "args":["--model_path","/home/jkl6486/hermes/exp_adp/cloudleak_rafdb_amazon/model.pth","--hapi_info","fer/expw/microsoft_fer/22-05-23","--optimizer","Lion","--epochs","200","--adv_train","pgd","--log_dir","aaa","--n_sample","64","--sample_times","37","--lr_warmup_epoch","75","--adaptive","cloudleak","--batch_size","64","--model","resnet50","--lr","3e-4","--op_parameters","full","--validate_interval","1","--num_classes","8","--dataset","expw","--lr_scheduler","--save","--api","amazon"
         ]
 
         },

@@ -3,7 +3,8 @@ import numpy as np
 
 def split_dataset(dataset: Dataset | Subset,
                   length: int = None, percent: float = None,
-                  shuffle: bool = True
+                  shuffle: bool = True, same_distribution: bool=False,
+                  num_classes: int = None,labels=None,
                   ) -> tuple[Subset, Subset]:
     r"""Split a dataset into two subsets.
 
@@ -53,13 +54,38 @@ def split_dataset(dataset: Dataset | Subset,
         length += 64 - (length % 64)
         if length > len(dataset):
             length -= 64
-    indices = np.arange(len(dataset))
-    if shuffle:
-        np.random.shuffle(indices)
-    if isinstance(dataset, Subset):
-        idx = np.array(dataset.indices)
-        indices = idx[indices]
-        dataset = dataset.dataset
-    subset1 = Subset(dataset, indices[:length])
-    subset2 = Subset(dataset, indices[length:])
-    return subset1, subset2
+    if same_distribution:
+        percent = float(length/len(labels))
+        labels = np.array(labels)
+        # n_labeled_per_class = int(length/num_classes)
+
+        train_labeled_idxs = []
+        train_unlabeled_idxs = []
+
+
+        for i in range(num_classes):
+            idxs = np.where(labels == i)[0]
+            n_labeled_per_class = int(len(idxs)*percent)
+            np.random.shuffle(idxs)
+            train_labeled_idxs.extend(idxs[:n_labeled_per_class])
+            train_unlabeled_idxs.extend(idxs[n_labeled_per_class:])
+        if shuffle:  
+            np.random.shuffle(train_labeled_idxs)
+            np.random.shuffle(train_unlabeled_idxs)
+        if len(train_labeled_idxs)<length:
+            train_labeled_idxs.extend(train_unlabeled_idxs[:length-len(train_labeled_idxs)])
+            train_unlabeled_idxs = train_unlabeled_idxs[length-len(train_labeled_idxs):]
+        subset1 = Subset(dataset, train_labeled_idxs)
+        return subset1,train_unlabeled_idxs
+    else:
+        indices = np.arange(len(dataset))
+        if shuffle:
+            np.random.shuffle(indices)
+        if isinstance(dataset, Subset):
+            idx = np.array(dataset.indices)
+            indices = idx[indices]
+            dataset = dataset.dataset
+        subset1 = Subset(dataset, indices[:length])
+        subset2 = Subset(dataset, indices[length:])
+        return subset1, subset2
+
