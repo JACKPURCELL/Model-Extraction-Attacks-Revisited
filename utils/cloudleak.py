@@ -381,7 +381,7 @@ from torchvision.utils import save_image
 
 
 def get_api(_input, x, indices, api='amazon', tea_model=None):
-    adv_x_num = 500
+    adv_x_num = 700
 
     # define a transform to convert a tensor to PIL image
     transform = T.ToPILImage(mode='RGB')
@@ -538,42 +538,48 @@ def distillation(module: nn.Module, pgd_set, num_classes: int,
     already_selected = []
     
     if adaptive == 'cloudleak':
-        from trojanzoo.optim import PGD
-        pgd = PGD(pgd_alpha=2 / 255, pgd_eps=4 / 255, iteration=7, random_init=True)
-
+        if adv_train == 'pgd':
+            from trojanzoo.optim import PGD
+            pgd = PGD(pgd_alpha=2 / 255, pgd_eps=4 / 255, iteration=7, random_init=True)
+        elif adv_train =='cw':
+            cw = CW(module, c=2, kappa=40, steps=50, lr=0.01)
         def after_loss_fn(_input: torch.Tensor, _output: torch.Tensor = None
                           ):
 
-
+        
             model_label = torch.argmax(_output, dim=-1)
+            if adv_train == 'pgd':
+                def pgd_loss_fn(_input: torch.Tensor,target:torch.Tensor,**kwargs):
+                    if encoder_attack:
+                        return -F.cross_entropy(forward_fn(AE.decoder(_input)), target)
+                    return -F.cross_entropy(forward_fn(_input), target)
 
-            def pgd_loss_fn(_input: torch.Tensor,target:torch.Tensor,**kwargs):
-                if encoder_attack:
-                    return -F.cross_entropy(forward_fn(AE.decoder(_input)), target)
-                return -F.cross_entropy(forward_fn(_input), target)
+                @torch.no_grad()
+                def early_stop_check(current_idx: torch.Tensor,
+                                        adv_input: torch.Tensor, target: torch.Tensor, *args,
+                                        stop_threshold: float = None, require_class: bool = None,
+                                        **kwargs) -> torch.Tensor:
+                    if encoder_attack:
+                        _class = torch.argmax(forward_fn(AE.decoder(adv_input[current_idx])), dim=-1)
+                    else:
+                        _class = torch.argmax(forward_fn(adv_input[current_idx]), dim=-1)
+                    class_result = _class == target[current_idx]
+                    class_result = ~class_result
+                    result = class_result
+                    return result.detach().cpu()
+                pgd.early_stop_check = early_stop_check
 
-            @torch.no_grad()
-            def early_stop_check(current_idx: torch.Tensor,
-                                    adv_input: torch.Tensor, target: torch.Tensor, *args,
-                                    stop_threshold: float = None, require_class: bool = None,
-                                    **kwargs) -> torch.Tensor:
-                if encoder_attack:
-                    _class = torch.argmax(forward_fn(AE.decoder(adv_input[current_idx])), dim=-1)
-                else:
-                    _class = torch.argmax(forward_fn(adv_input[current_idx]), dim=-1)
-                class_result = _class == target[current_idx]
-                class_result = ~class_result
-                result = class_result
-                return result.detach().cpu()
-            pgd.early_stop_check = early_stop_check
-
-            adv_x, succ_tensor = pgd.optimize(_input=_input, loss_fn=pgd_loss_fn,target=model_label,loss_kwargs={'target':model_label})
-            
-            succ_tensor = succ_tensor.eq(-1)
+                adv_x, succ_tensor = pgd.optimize(_input=_input, loss_fn=pgd_loss_fn,target=model_label,loss_kwargs={'target':model_label})
+            elif adv_train == 'cw':
+                adv_x = cw(_input, model_label)
+                
             adv_x, _adv_soft_label, _adv_hapi_label, new_indices = get_api(
                 _input, adv_x, np.arange(adv_x.shape[0]), api)
-           
-            return adv_x, _adv_soft_label, _adv_hapi_label,new_indices
+
+            adv_model_output = torch.argmax(forward_fn(adv_x) , dim=-1)
+            
+            attack_succ = (1 - float(torch.sum(torch.eq(model_label[new_indices],adv_model_output)).item()) / len(adv_model_output)) * 100
+            return adv_x, _adv_soft_label, _adv_hapi_label,new_indices,attack_succ
 
     writer = SummaryWriter(log_dir=log_dir)
     validate_fn = dis_validate
@@ -590,14 +596,11 @@ def distillation(module: nn.Module, pgd_set, num_classes: int,
 
 
     logger = MetricLogger()
-    if mixmatch or encoder_train:
-        logger.create_meters(loss=None)
-    elif adv_train:
-        logger.create_meters(gt_acc1=None,
-                             hapi_loss=None, hapi_acc1=None, attack_succ=None, ahapi_succ=None)
-    else:
-        logger.create_meters(gt_acc1=None,
+
+    logger.create_meters(gt_acc1=None,
                              hapi_loss=None, hapi_acc1=None)
+
+                      
     if resume and lr_scheduler:
         for _ in range(resume):
             lr_scheduler.step()
@@ -629,12 +632,19 @@ def distillation(module: nn.Module, pgd_set, num_classes: int,
                                                         num_workers=workers, pin_memory=True,drop_last=False)
 
                 for i,data in enumerate(loader_dst):
-                    input_batch,_,_,_ = data
+                    input_batch,_,_,hapi_label = data
                     input_batch = input_batch.cuda()
                     with torch.no_grad():
                         _output=forward_fn(input_batch)
                     # generate adv_x and query
-                    adv_x, _adv_soft_label, _adv_hapi_label,new_indices = after_loss_fn(_input=input_batch, _output=_output)
+                    adv_x, _adv_soft_label, _adv_hapi_label,new_indices,attack_succ = after_loss_fn(_input=input_batch, _output=_output)
+                    # hapi_label[new_indices] _adv_hapi_label 
+
+                    ahapi_succ = (1 - float(torch.sum(torch.eq(hapi_label[new_indices], _adv_hapi_label)).item()) / len(_adv_hapi_label)) * 100
+# _label              ahapi_succ = (1 - float(torch.sum(torch.eq(hapi_label[new_indices],
+#                               torch.argmax(_adv_soft_label, dim=-1)).to(torch.int)).item() / len(ori_soft))) * 100
+                    print("attack_succ: ",attack_succ,"  ahapi_succ: ",ahapi_succ)
+
                     if i == 0 and _epoch == 1:
                         Synthetic_x = input_batch[new_indices]
                         Synthetic_adv_x = adv_x

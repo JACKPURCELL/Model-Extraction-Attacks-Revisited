@@ -200,7 +200,7 @@
             "env":{
                 "CUDA_VISIBLE_DEVICES":"0"
             },
-            "args":["--optimizer","Lion","--epochs","200","--adv_train","pgd","--log_dir","aaa","--n_sample","64","--sample_times","37","--lr_warmup_epoch","75","--adaptive","random","--batch_size","64","--model","resnet50","--lr","3e-4","--op_parameters","full","--validate_interval","1","--num_classes","7","--dataset","kdef","--lr_scheduler","--save","--api","facepp"
+            "args":["--optimizer","Lion","--epochs","200","--adv_train","cw","--log_dir","aaa","--n_sample","64","--sample_times","37","--lr_warmup_epoch","75","--adaptive","cloudleak","--batch_size","64","--model","resnet50","--lr","3e-4","--op_parameters","full","--validate_interval","1","--num_classes","7","--dataset","kdef","--lr_scheduler","--save","--api","facepp"
         ]
 
         },
