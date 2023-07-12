@@ -89,7 +89,41 @@ class TransformTwice:
         out1 = self.transform(inp)
         out2 = self.transform(inp)
         return out1, out2
-       
+
+from .randaugment import RandAugmentMC
+
+    
+class TransformFixMatch(object):
+    def __init__(self):
+        
+        
+        self.weak = transforms.Compose([
+            transforms.Resize(224),
+            transforms.RandomHorizontalFlip(),
+            transforms.RandomCrop(size=224,
+                                  padding=int(224*0.125),
+                                  padding_mode='reflect')]
+            )
+        self.strong = transforms.Compose([
+            transforms.Resize(224),
+            transforms.RandomHorizontalFlip(),
+            transforms.RandomCrop(size=224,
+                                  padding=int(224*0.125),
+                                  padding_mode='reflect'),
+            RandAugmentMC(n=2, m=10)])
+        self.normalize = transforms.Compose([
+            transforms.AutoAugment(
+                transforms.AutoAugmentPolicy.IMAGENET),
+            transforms.PILToTensor(),
+            transforms.ConvertImageDtype(torch.float)]
+            )
+
+    def __call__(self, x):
+        weak = self.weak(x)
+        strong = self.strong(x)
+        return self.normalize(weak), self.normalize(strong)
+    
+           
 class RAFDB(datasets.ImageFolder):
     
     def __init__(self, input_directory=None, hapi_data_dir:str = None, hapi_info:str = None, api=None,transform='Normal'):
@@ -108,6 +142,20 @@ class RAFDB(datasets.ImageFolder):
                 auto_augment=True, crop_shape = 224,
                 norm_par=None)
             transform = TransformTwice(transform)
+        elif transform == 'fixmatch':
+            transform = TransformFixMatch()
+        elif transform == 'fixmatch_Normal':
+            transform = transforms.Compose([
+            transforms.Resize(224),
+            transforms.RandomHorizontalFlip(),
+            transforms.RandomCrop(size=224,
+                                padding=int(224*0.125),
+                                padding_mode='reflect'),
+            transforms.AutoAugment(
+                transforms.AutoAugmentPolicy.IMAGENET),
+            transforms.PILToTensor(),
+            transforms.ConvertImageDtype(torch.float)
+        ])
         elif transform == 'raw':
             transform = transforms.Compose([transforms.Resize(224),
                                             transforms.PILToTensor(),

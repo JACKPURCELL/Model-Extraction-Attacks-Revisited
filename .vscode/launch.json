@@ -112,6 +112,21 @@
 
         },
         {
+            "name": "mainresnetfixmatch.py",
+            "type": "python",
+            "request": "launch",
+            "program": "main.py",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "env":{
+                "CUDA_VISIBLE_DEVICES":"1"
+            },
+            "args":["--usl","--optimizer","Lion","--epochs","200","--batch_size","64","--model","resnet50","--lr","3e-4","--op_parameters","full","--validate_interval","1","--num_classes","7","--dataset","rafdb","--lr_scheduler","--save","--weight_decay","0.0","--log_dir","mixmatch_test","--hapi_info","fer/rafdb/microsoft_fer/22-05-23","--label_batch","32","--fixmatch","--seed","1688","--validate_interval","1"
+        ]
+
+
+        },
+        {
             "name": "mainresnetadaptive.py",
             "type": "python",
             "request": "launch",

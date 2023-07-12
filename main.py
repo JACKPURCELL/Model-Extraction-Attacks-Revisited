@@ -23,7 +23,7 @@ from dataset.imdb import IMDB
 from dataset.rafdb import RAFDB
 from dataset.kdef import KDEF
 from dataset.cifar import CIFAR10
-from utils.model import distillation,train
+from utils.model import distillation
 from torch.utils.data import Dataset,Subset
 
 
@@ -64,6 +64,7 @@ parser.add_argument('--dataset', type=str, default='imdb')
 parser.add_argument('--log_dir', type=str, default=None)
 parser.add_argument('--optimizer', type=str, default='Lion')
 parser.add_argument('--mixmatch', action='store_true')
+parser.add_argument('--fixmatch', action='store_true')
 parser.add_argument('--usl', action='store_true')
 parser.add_argument('--seed', type=int, default=42)
 parser.add_argument('--op_parameters', type=str, default='partial')
@@ -75,7 +76,8 @@ parser.add_argument('--hapi_label_train', action='store_true')
 parser.add_argument('--retokenize', action='store_true')
 parser.add_argument('--split_unlabel_percent', type=float, default=0.0)
 parser.add_argument('--split_label_percent', type=float, default=1.0)
-
+parser.add_argument('--mu', default=3, type=int,
+                        help='coefficient of unlabeled batch size')
 parser.add_argument('--unlabel_batch', type=int, default=-1)
 parser.add_argument('--label_batch', type=int, default=-1)
 
@@ -230,7 +232,7 @@ def get_sampler(train_dataset):
     return WeightedRandomSampler(torch.DoubleTensor(weights), int(num_samples))
 
 unlabel_dataset_indices =None
-if args.usl and args.mixmatch:
+if args.usl and (args.mixmatch or args.fixmatch):
     # selected_inds=[  3376,  8332,  8158,  4651, 10665, 10873,    63,  6225,  7267,
     #      704,  9358,  7070,  8233,  5628,  9265,  5855,  8803, 11265,
     #      445,  5462,  5644,  9034,   633,  7308,  4500,  1802, 11041,
@@ -295,8 +297,12 @@ if args.usl and args.mixmatch:
 
     new_index = np.arange(len(train_dataset))[~np.in1d(np.arange(len(train_dataset)),selected_inds)]
     np.random.shuffle(new_index)
+    if args.mixmatch:
+        transform_type = 'mixmatch'
+    elif args.fixmatch:
+        transform_type = 'fixmatch'
     _unlabel_dataset = Subset(RAFDB(input_directory=os.path.join('/data/jc/data/image/RAFDB',"train"),
-                           hapi_data_dir=args.hapi_data_dir,hapi_info=args.hapi_info,api=args.api,transform = 'mixmatch'),
+                           hapi_data_dir=args.hapi_data_dir,hapi_info=args.hapi_info,api=args.api,transform = transform_type),
                                 new_index)
     if args.balance:
         sampler=get_sampler(_label_dataset)
@@ -308,34 +314,38 @@ if args.usl and args.mixmatch:
                     batch_size=args.batch_size,
                     shuffle=shuffle,sampler=sampler,
                     num_workers=args.num_workers,drop_last=True)
+    batch_size_unlabel = args.batch_size*args.mu if args.fixmatch else args.batch_size
     _unlabel_dataloader = DataLoader(dataset=_unlabel_dataset,
-                    batch_size=args.batch_size,
+                    batch_size=batch_size_unlabel,
                     num_workers=args.num_workers,drop_last=True)
     unlabel_iterator = itertools.cycle(_unlabel_dataloader)
     
-elif args.mixmatch:#mixmatch
+elif args.mixmatch or args.fixmatch:#mixmatch
     _label_dataset, _unlabel_dataset = split_dataset(
         train_dataset,
         length=args.label_batch*args.batch_size,
         same_distribution=False,num_classes=args.num_classes,
         labels=train_dataset.targets)
-    
+    if args.mixmatch:
+        transform_type = 'mixmatch'
+    elif args.fixmatch:
+        transform_type = 'fixmatch'
     _unlabel_dataset_indices = _unlabel_dataset.indices
     
     # _label_dataset, _temp_unlabel_dataset = split_dataset(
     #     _temp_dataset,length=args.label_batch*args.batch_size)
 
     if args.dataset == 'rafdb':
-        _unlabel_dataset = Subset(RAFDB(input_directory=os.path.join('/data/jc/data/image/RAFDB',"train"),hapi_data_dir=args.hapi_data_dir,hapi_info=args.hapi_info,api=args.api,transform = 'mixmatch'),
+        _unlabel_dataset = Subset(RAFDB(input_directory=os.path.join('/data/jc/data/image/RAFDB',"train"),hapi_data_dir=args.hapi_data_dir,hapi_info=args.hapi_info,api=args.api,transform = transform_type),
                                 _unlabel_dataset_indices)
     elif args.dataset == 'kdef':
-        _unlabel_dataset = Subset(KDEF(input_directory=os.path.join('/data/jc/data/image/KDEF_and_AKDEF/KDEF_spilit',"train"),hapi_data_dir=args.hapi_data_dir,hapi_info=args.hapi_info,api=args.api,transform = 'mixmatch'),
+        _unlabel_dataset = Subset(KDEF(input_directory=os.path.join('/data/jc/data/image/KDEF_and_AKDEF/KDEF_spilit',"train"),hapi_data_dir=args.hapi_data_dir,hapi_info=args.hapi_info,api=args.api,transform = transform_type),
                                 _unlabel_dataset_indices)
     elif args.dataset == 'cifar10':
-        _unlabel_dataset = Subset(CIFAR10(mode='train',transform = 'mixmatch'),
+        _unlabel_dataset = Subset(CIFAR10(mode='train',transform = transform_type),
                                 _unlabel_dataset_indices)
     elif args.dataset == 'expw':
-        _unlabel_dataset = Subset(EXPW(input_directory=os.path.join('/data/jc/data/image/EXPW_224',"train"),hapi_data_dir=args.hapi_data_dir,hapi_info=args.hapi_info,api=args.api,transform = 'mixmatch'),
+        _unlabel_dataset = Subset(EXPW(input_directory=os.path.join('/data/jc/data/image/EXPW_224',"train"),hapi_data_dir=args.hapi_data_dir,hapi_info=args.hapi_info,api=args.api,transform = transform_type),
                                 _unlabel_dataset_indices)
     else:
         raise NotImplementedError
@@ -349,8 +359,10 @@ elif args.mixmatch:#mixmatch
                     batch_size=args.batch_size,
                     shuffle=shuffle,sampler=sampler,
                     num_workers=args.num_workers,drop_last=True)
+    batch_size_unlabel = args.batch_size*args.mu if args.fixmatch else args.batch_size
+    
     _unlabel_dataloader = DataLoader(dataset=_unlabel_dataset,
-                    batch_size=args.batch_size,
+                    batch_size=batch_size_unlabel,
                     num_workers=args.num_workers,drop_last=True)
     unlabel_iterator = itertools.cycle(_unlabel_dataloader)
     
@@ -489,7 +501,7 @@ distillation(module=model,pgd_set = test_dataset,adv_train=args.adv_train,num_cl
              log_dir=log_dir,
              grad_clip=args.grad_clip,
              loader_train=train_loader,loader_valid=test_loader,unlabel_iterator=unlabel_iterator,
-             mixmatch=args.mixmatch,
+             mixmatch=args.mixmatch,mu=args.mu,fixmatch=args.fixmatch,
              save=args.save,label_train=args.label_train,
              hapi_label_train=args.hapi_label_train, lr_scheduler_freq=args.lr_scheduler_freq,
              api=args.api,task=task,unlabel_dataset_indices=unlabel_dataset_indices,
