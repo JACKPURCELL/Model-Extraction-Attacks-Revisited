@@ -106,7 +106,7 @@
             "env":{
                 "CUDA_VISIBLE_DEVICES":"0"
             },
-            "args":["--optimizer","Lion","--epochs","200","--batch_size","64","--model","resnet50","--lr","3e-4","--op_parameters","full","--validate_interval","1","--num_classes","7","--dataset","expw","--lr_scheduler","--save","--weight_decay","0.0","--log_dir","mixmatch_test","--hapi_info","fer/expw/microsoft_fer/22-05-23","--label_batch","32","--unlabel_batch","32","--mixmatch","--seed","1688","--validate_interval","20"
+            "args":["--optimizer","Lion","--epochs","200","--batch_size","64","--model","resnet50","--lr","3e-4","--op_parameters","full","--validate_interval","1","--num_classes","7","--dataset","rafdb","--lr_scheduler","--save","--weight_decay","0.0","--log_dir","mixmatch_test","--hapi_info","fer/rafdb/microsoft_fer/22-05-23","--label_batch","32","--mixmatch","--seed","1688","--validate_interval","1"
         ]
 
 

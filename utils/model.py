@@ -1241,7 +1241,10 @@ def distillation(module: nn.Module, pgd_set, num_classes: int,
                 if save:
                     save_fn(log_dir=log_dir, module=module, verbose=verbose)
             else:
-                cur_acc = validate_result[0]
+                if label_train:
+                    cur_acc = validate_result[2]
+                else:    
+                    cur_acc = validate_result[0]
                 if cur_acc >= best_acc:
                     best_validate_result = validate_result
                     if verbose:
@@ -1558,7 +1561,7 @@ def dis_validate(module: nn.Module, num_classes: int,
     #         writer.add_scalars(main_tag='ff/' + main_tag,
     #                         tag_scalar_dict={tag: ff}, global_step=_epoch)
 
-    return hapi_acc1, hapi_loss
+    return hapi_acc1, hapi_loss, gt_acc1
 
 
 def attack_validate(module: nn.Module, num_classes: int,

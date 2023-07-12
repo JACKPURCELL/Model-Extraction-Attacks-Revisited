@@ -39,3 +39,5 @@ exp_adv_encoder/
 exp_optim/
 exp_re/
 exp_mix/
+saved/cifar10_usl/
+cifar10_ckpt_epoch_200.pth

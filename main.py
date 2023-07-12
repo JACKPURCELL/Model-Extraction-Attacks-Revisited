@@ -64,6 +64,7 @@ parser.add_argument('--dataset', type=str, default='imdb')
 parser.add_argument('--log_dir', type=str, default=None)
 parser.add_argument('--optimizer', type=str, default='Lion')
 parser.add_argument('--mixmatch', action='store_true')
+parser.add_argument('--usl', action='store_true')
 parser.add_argument('--seed', type=int, default=42)
 parser.add_argument('--op_parameters', type=str, default='partial')
 parser.add_argument('--lr_scheduler', action='store_true')
@@ -229,13 +230,97 @@ def get_sampler(train_dataset):
     return WeightedRandomSampler(torch.DoubleTensor(weights), int(num_samples))
 
 unlabel_dataset_indices =None
-if args.mixmatch:#mixmatch
-    _label_dataset, _unlabel_dataset_indices = split_dataset(
+if args.usl and args.mixmatch:
+    # selected_inds=[  3376,  8332,  8158,  4651, 10665, 10873,    63,  6225,  7267,
+    #      704,  9358,  7070,  8233,  5628,  9265,  5855,  8803, 11265,
+    #      445,  5462,  5644,  9034,   633,  7308,  4500,  1802, 11041,
+    #     3848,  8908, 10100, 10763,  7740,  6941,  8359,  9888, 10064,
+    #     2911,   566,  9957,  3965, 11923,  7125,  9171, 10386,  5434,
+    #     9869,  5002,  6913,  2666,  1876, 12122,  5061, 10945,  7978,
+    #     5470,  3982,  9043,  3470, 10937, 10554,  6342,  7910,  5804,
+    #     3119,  5649,  5955,  9979,  2991,  6496,  3319,   251, 10982,
+    #      729,  3611,  3333,  4051, 10239, 11604,  2475,  8478,   396,
+    #     5541, 12066,  9512, 11973,  7805,  5656,  7455,  1358,  9665,
+    #     5076,   692, 11267,  4398,   956, 11003,  2098,  1173,  8567,
+    #     9191,  6416, 11537,  4033,   249,   684,  8340, 11758, 12185,
+    #      726,   859,  4287, 11886,  7734,  4001,  8084, 10018,  3727,
+    #     4465,   425,  4853,  9506,  8140, 10083,  7649,  8446,  7902,
+    #     6610, 11828,  3243,  8406,  4230,   450, 10541,  5791,  7862,
+    #       60,  9312,  7467, 11005, 10428,  6083,  3992, 11171, 10528,
+    #     6983,  3548,  6561,  6321,  1663,  3136,  3308, 10706,  7366,
+    #     5785,  8496,  4058,  5979,  3495,  9672, 11359,  5577, 10998,
+    #     7576,  7183,  4958, 11630, 10086,  7198, 12209,  7983, 10270,
+    #    12014, 11254,   889,  5502,  5547, 10369,  5398,  4134,  3125,
+    #     1208,  5039, 12096,  8066,  9392,  7785,  7016,  8679,  2847,
+    #     3643,  5754,  1765,  2996,  4594,  9090,  3857, 11529,   479,
+    #     6073,  3337,   157,   955, 10166,  2670,  5326, 11451, 11388,
+    #     4569,  1850,  8851, 12013, 11456,  1331,  2001, 10372,  2055,
+    #     6461, 11139,  8125,  4667,  6471,  5553,  2516,  9021,  6502,
+    #     2800,  2929,  7260,   585,  3451,   357,  7032,  9145, 10919,
+    #    10424, 10443, 11785,  3004,  2377, 11869,   820,  1053, 11661,
+    #      945, 11016,  9649,  2264,  8162,  9925,   187,  5287,  9198,
+    #    12009,  5170,  3891,  7868]
+    selected_inds=[8020,  4228,  8881,  1054,  1097,  4116,   182,  4873, 10462,
+        1595,   137, 11866,   367,  2814, 10317,  4372, 11641,  8342,
+        3086,   759,   906,  3273,  4059,  6186, 10980, 10087,  3484,
+        3622,    44,  8974,  5036,  9636,  7166, 11505,  1596, 10151,
+        9810,  5688,  1510,  2343,   416,  8171,  7277,  7606,  8672,
+        6902, 10233, 11818, 11164,  4377,  1646,  7956,  6167,  6143,
+        9186, 10277,   789,   768,  8537,  7014,   977,   509,  8820,
+       11195, 10835,  2172,  1468,  2870,  8667,  4046,   674,  5411,
+        5392,  8871,  3774,  9057, 10667,  3477,  1958,  9381,  8230,
+        2404,  9733,  1981,  8245,  3734,   729,  3180,  9388,  6571,
+        2754,  5711,  2960, 12187,   943, 10026,  3567,  7865, 11301,
+       11947,  1757,   613,  8725,  5810,  1369,  9921,  1882,  9529,
+        7591,  1254,  9125,  8052,  9533, 11965,  4214,  6667,  8356,
+        4331,  1356,  2367, 11015,  9000,   857,  5452,  6924,  7696,
+        6059,  7188,  9479,  6385,  2016,  9279,  1398,  3555,  1739,
+        9570,    87,  5257,  6948,  8278, 10783,  6090,  7787, 11309,
+        3278,  9732, 11477,  5626,  6587,  1329,   300,  6528,  7327,
+        3383,  7162,  9258,  4401,   707, 11345,  4717, 11761,  4593,
+        5892, 11013,  6474,  3357,  4986,  3073,  9782,  7755,  6728,
+        6769,  9490,  7850, 10964,  4703,   714,  4951,  6479,  6864,
+        6418,  5586,  1773,  8349,  9793, 10355,  5268,  9588,  3058,
+       11137, 10365,  2442,  5696,  4198,  3013,  6910,  9646,  8478,
+        4431,   985,  5100,  5624,  3262,  5299, 11591,  9131,  9416,
+         213, 11095,  3232,  9507,    48,  6004,  5231,  5356,  1215,
+        7684, 11922, 10876,  8589,  8588,  8261,  2657,  6137,   174,
+        9623,  1735,  2788, 10494,  8057,  2892,  4687, 10542,  3185,
+       11583,  3918,  8885,  1826,  7273, 12020, 11317, 10622,  1490,
+        7539,  7170, 11437,  7285, 10366,  8161,  9041,  3641,  1706,
+        6033,  9179,  4596,  7560]
+    _label_dataset = Subset(RAFDB(input_directory=os.path.join('/data/jc/data/image/RAFDB',"train"),
+                           hapi_data_dir=args.hapi_data_dir,hapi_info=args.hapi_info,api=args.api,transform = 'Normal'),
+                                selected_inds)
+
+    new_index = np.arange(len(train_dataset))[~np.in1d(np.arange(len(train_dataset)),selected_inds)]
+    np.random.shuffle(new_index)
+    _unlabel_dataset = Subset(RAFDB(input_directory=os.path.join('/data/jc/data/image/RAFDB',"train"),
+                           hapi_data_dir=args.hapi_data_dir,hapi_info=args.hapi_info,api=args.api,transform = 'mixmatch'),
+                                new_index)
+    if args.balance:
+        sampler=get_sampler(_label_dataset)
+        shuffle = False
+    else:
+        sampler=None
+        shuffle = True
+    train_loader = DataLoader(dataset=_label_dataset,
+                    batch_size=args.batch_size,
+                    shuffle=shuffle,sampler=sampler,
+                    num_workers=args.num_workers,drop_last=True)
+    _unlabel_dataloader = DataLoader(dataset=_unlabel_dataset,
+                    batch_size=args.batch_size,
+                    num_workers=args.num_workers,drop_last=True)
+    unlabel_iterator = itertools.cycle(_unlabel_dataloader)
+    
+elif args.mixmatch:#mixmatch
+    _label_dataset, _unlabel_dataset = split_dataset(
         train_dataset,
         length=args.label_batch*args.batch_size,
-        same_distribution=True,num_classes=args.num_classes,
+        same_distribution=False,num_classes=args.num_classes,
         labels=train_dataset.targets)
     
+    _unlabel_dataset_indices = _unlabel_dataset.indices
     
     # _label_dataset, _temp_unlabel_dataset = split_dataset(
     #     _temp_dataset,length=args.label_batch*args.batch_size)
@@ -271,11 +356,50 @@ if args.mixmatch:#mixmatch
     
     
 elif args.label_batch != -1:#adaptive or part data
-    
-    _label_dataset, _unlabel_dataset = split_dataset(
-        train_dataset,length=args.label_batch*args.batch_size)
+    if args.usl:
+        selected_inds=[8020,  4228,  8881,  1054,  1097,  4116,   182,  4873, 10462,
+        1595,   137, 11866,   367,  2814, 10317,  4372, 11641,  8342,
+        3086,   759,   906,  3273,  4059,  6186, 10980, 10087,  3484,
+        3622,    44,  8974,  5036,  9636,  7166, 11505,  1596, 10151,
+        9810,  5688,  1510,  2343,   416,  8171,  7277,  7606,  8672,
+        6902, 10233, 11818, 11164,  4377,  1646,  7956,  6167,  6143,
+        9186, 10277,   789,   768,  8537,  7014,   977,   509,  8820,
+       11195, 10835,  2172,  1468,  2870,  8667,  4046,   674,  5411,
+        5392,  8871,  3774,  9057, 10667,  3477,  1958,  9381,  8230,
+        2404,  9733,  1981,  8245,  3734,   729,  3180,  9388,  6571,
+        2754,  5711,  2960, 12187,   943, 10026,  3567,  7865, 11301,
+       11947,  1757,   613,  8725,  5810,  1369,  9921,  1882,  9529,
+        7591,  1254,  9125,  8052,  9533, 11965,  4214,  6667,  8356,
+        4331,  1356,  2367, 11015,  9000,   857,  5452,  6924,  7696,
+        6059,  7188,  9479,  6385,  2016,  9279,  1398,  3555,  1739,
+        9570,    87,  5257,  6948,  8278, 10783,  6090,  7787, 11309,
+        3278,  9732, 11477,  5626,  6587,  1329,   300,  6528,  7327,
+        3383,  7162,  9258,  4401,   707, 11345,  4717, 11761,  4593,
+        5892, 11013,  6474,  3357,  4986,  3073,  9782,  7755,  6728,
+        6769,  9490,  7850, 10964,  4703,   714,  4951,  6479,  6864,
+        6418,  5586,  1773,  8349,  9793, 10355,  5268,  9588,  3058,
+       11137, 10365,  2442,  5696,  4198,  3013,  6910,  9646,  8478,
+        4431,   985,  5100,  5624,  3262,  5299, 11591,  9131,  9416,
+         213, 11095,  3232,  9507,    48,  6004,  5231,  5356,  1215,
+        7684, 11922, 10876,  8589,  8588,  8261,  2657,  6137,   174,
+        9623,  1735,  2788, 10494,  8057,  2892,  4687, 10542,  3185,
+       11583,  3918,  8885,  1826,  7273, 12020, 11317, 10622,  1490,
+        7539,  7170, 11437,  7285, 10366,  8161,  9041,  3641,  1706,
+        6033,  9179,  4596,  7560]
+        _label_dataset = Subset(RAFDB(input_directory=os.path.join('/data/jc/data/image/RAFDB',"train"),
+                            hapi_data_dir=args.hapi_data_dir,hapi_info=args.hapi_info,api=args.api,transform = 'Normal'),
+                                    selected_inds)
 
-    unlabel_dataset_indices=_unlabel_dataset.indices
+        unlabel_dataset_indices = np.arange(len(train_dataset))[~np.in1d(np.arange(len(train_dataset)),selected_inds)]
+        np.random.shuffle(unlabel_dataset_indices)
+        _unlabel_dataset = Subset(RAFDB(input_directory=os.path.join('/data/jc/data/image/RAFDB',"train"),
+                            hapi_data_dir=args.hapi_data_dir,hapi_info=args.hapi_info,api=args.api,transform = 'mixmatch'),
+                                    unlabel_dataset_indices)
+    else:
+        _label_dataset, _unlabel_dataset = split_dataset(
+            train_dataset,length=args.label_batch*args.batch_size)
+
+        unlabel_dataset_indices=_unlabel_dataset.indices
     if args.balance:
         sampler=get_sampler(_label_dataset)
         shuffle = False

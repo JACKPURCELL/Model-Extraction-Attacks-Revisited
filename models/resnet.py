@@ -154,7 +154,14 @@ class ResNet(nn.Module):
         x = self.classifier(x)
         return x
 
-    
+    def get_usl(self,x):
+        if self.norm_par is not None:
+            x = self.transform(x)
+        x = self.features(x)
+        x = self.avgpool(x)
+        x = torch.flatten(x, 1)
+        return x
+        
     def get_features(self, x):
         if self.norm_par is None:
             return self.features(x)
