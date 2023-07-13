@@ -136,10 +136,10 @@ def de_interleave_fixmatch(x, size):
 
 def fixmatch_get_data(data, forward_fn, unlabel_iterator,mu):
 
-    inputs_x, targets_x, _soft_label, hapi_label = data
+    inputs_x, _label, _soft_label, hapi_label = data
     inputs_x = inputs_x.cuda()
     _soft_label = _soft_label.cuda()
-    targets_x = targets_x.cuda()
+    _label = _label.cuda()
     hapi_label = hapi_label.cuda()
     (inputs_u_w, inputs_u_s), _, _, _ = next(unlabel_iterator)
     inputs_u_w = inputs_u_w.cuda()
@@ -165,7 +165,7 @@ def fixmatch_get_data(data, forward_fn, unlabel_iterator,mu):
     logits_u_w, logits_u_s = logits[batch_size:].chunk(2)
     del logits
 
-    Lx = F.cross_entropy(logits_x, targets_x, reduction='mean')
+    Lx = F.cross_entropy(logits_x, _soft_label, reduction='mean')
 
     pseudo_label = torch.softmax(logits_u_w.detach()/args_T, dim=-1)
     max_probs, targets_u = torch.max(pseudo_label, dim=-1)
