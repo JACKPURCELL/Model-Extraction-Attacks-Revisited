@@ -174,7 +174,7 @@ class IMDB(Dataset):
 
         match self.api:
             case 'amazon':
-                soft_label = torch.ones(3)
+                soft_label = torch.ones(4)
                 soft_label[0] = api_result['SentimentScore']['Positive']
                 soft_label[1] = api_result['SentimentScore']['Negative']
                 soft_label[2] = api_result['SentimentScore']['Mixed']
