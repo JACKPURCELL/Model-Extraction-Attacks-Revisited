@@ -177,20 +177,24 @@ class IMDB(Dataset):
                 soft_label = torch.ones(3)
                 soft_label[0] = api_result['SentimentScore']['Positive']
                 soft_label[1] = api_result['SentimentScore']['Negative']
-                soft_label[2] = api_result['SentimentScore']['Mixed'] + api_result['SentimentScore']['Neutral']
-                if soft_label[0] >= soft_label[1]:
-                    hapi_label = torch.tensor(0)
-                else:
-                    hapi_label = torch.tensor(1)  
+                soft_label[2] = api_result['SentimentScore']['Mixed']
+                soft_label[3] = api_result['SentimentScore']['Neutral']
+                hapi_label = torch.argmax(soft_label,dim=-1)
+                # if soft_label[0] >= soft_label[1]:
+                #     hapi_label = torch.tensor(0)
+                # else:
+                #     hapi_label = torch.tensor(1)  
             case 'microsoft':
                 soft_label = torch.ones(3)
                 soft_label[0] = api_result[0]['positive']
                 soft_label[1] = api_result[0]['negative']
                 soft_label[2] = api_result[0]['neutral']
-                if soft_label[0] >= soft_label[1]:
-                    hapi_label = torch.tensor(0)
-                else:
-                    hapi_label = torch.tensor(1)
+                hapi_label = torch.argmax(soft_label,dim=-1)
+                
+                # if soft_label[0] >= soft_label[1]:
+                #     hapi_label = torch.tensor(0)
+                # else:
+                #     hapi_label = torch.tensor(1)
             case 'amazon_hapi':
                 file_spilt = re.split('_|.txt',file)
                 hapi_id = int(file_spilt[0])*100 + int(file_spilt[1])
