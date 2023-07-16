@@ -1124,8 +1124,10 @@ def distillation(module: nn.Module, pgd_set, num_classes: int,
             else:
                 match task:
                     case 'sentiment':
-                        _output = _output[:, :2]
-                        new_num_classes = 2
+                        # _output = _output[:, :2]
+                        # new_num_classes = 2
+                        new_num_classes = num_classes
+                        
                     case 'emotion':
                         new_num_classes = num_classes
                     case 'cifar10':
@@ -1428,8 +1430,10 @@ def dis_validate(module: nn.Module, num_classes: int,
             batch_size = int(_label.size(0))
             match task:
                 case 'sentiment':
-                    _output = _output[:, :2]
-                    new_num_classes = 2
+                    # _output = _output[:, :2]
+                    # new_num_classes = 2
+                    new_num_classes = num_classes
+                    
                 case 'emotion':
                     new_num_classes = num_classes
             hapi_acc1, hapi_acc5 = accuracy_fn(
@@ -1524,8 +1528,10 @@ def dis_validate(module: nn.Module, num_classes: int,
                 batch_size = int(_label.size(0))
                 match task:
                     case 'sentiment':
-                        _output = _output[:, :2]
-                        new_num_classes = 2
+                        # _output = _output[:, :2]
+                        # new_num_classes = 2
+                        new_num_classes = num_classes
+                        
                     case 'emotion':
                         new_num_classes = num_classes
                     case 'cifar10':
@@ -1697,8 +1703,10 @@ def attack_validate(module: nn.Module, num_classes: int,
             batch_size = int(_label.size(0))
             match task:
                 case 'sentiment':
-                    _output = _output[:, :2]
-                    new_num_classes = 2
+                    # _output = _output[:, :2]
+                    # new_num_classes = 2
+                    new_num_classes = num_classes
+                    
                 case 'emotion':
                     new_num_classes = num_classes
             hapi_acc1, hapi_acc5 = accuracy_fn(
@@ -1752,8 +1760,10 @@ def attack_validate(module: nn.Module, num_classes: int,
                 batch_size = int(_label.size(0))
                 match task:
                     case 'sentiment':
-                        _output = _output[:, :2]
-                        new_num_classes = 2
+                        # _output = _output[:, :2]
+                        # new_num_classes = 2
+                        new_num_classes = num_classes
+                        
                     case 'emotion':
                         new_num_classes = num_classes
                 hapi_acc1, hapi_acc5 = accuracy_fn(
