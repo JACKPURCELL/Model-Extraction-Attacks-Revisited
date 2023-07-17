@@ -201,9 +201,10 @@ if args.api == 'cifar10':
 else:
     tea_model = None
 if parallel:
-    model.model = nn.DataParallel(model).cuda()    
+    model.model = nn.DataParallel(model.model).cuda()    
 # model.load_state_dict(torch.load('/home/jkl6486/hermes/runs/fer_rafdb_facepp_fer_22-05-23_ep50_num_classes_7_lr0.0003_bs64_Lion_full_resnet50_percent_1.0_labeltrainfacepp_lr_schedulerdropout/model.pth'))
-# Initialize train & test datasets
+# Initialize train & test datasetsp
+
 if args.dataset == 'imdb':
     if 'hapi' not in args.api:
         path =  '/data/jc/data/sentiment/IMDB_api/'
