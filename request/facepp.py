@@ -73,7 +73,7 @@ for label in range(7):
     # for i in trange(len(files), desc='requesting facepp api', leave=True):        
     #     detect_faces(path,files[i])        
     
-    path = os.path.join('/data/jc/data/image/EXPW_224/valid', str(label))
+    path = os.path.join('/data/jc/data/image/EXPW_224/train', str(label))
 
     files = [f for f in os.listdir(path)
                         if os.path.isfile(os.path.join(path, f))]

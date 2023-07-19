@@ -56,6 +56,9 @@ class TransformTwice:
         out1 = self.transform(inp)
         out2 = self.transform(inp)
         return out1, out2
+
+def quantize_number(num):
+    return torch.round((num + 0.1) / 0.2) * 0.2 - 0.1  
        
 class KDEF(datasets.ImageFolder):
     def __init__(self, input_directory=None, hapi_data_dir:str = None, hapi_info:str = None, api=None,transform='Normal'):
@@ -82,8 +85,9 @@ class KDEF(datasets.ImageFolder):
             #    norm_par={'mean': [0.509, 0.303, 0.221],'std': [0.217, 0.164, 0.121]})
             transform = TransformTwice(transform)
         elif transform == 'raw':
-            transform = transforms.Compose([transforms.PILToTensor(),
-                                   transforms.ConvertImageDtype(torch.float)])    
+            transform = transforms.Compose([transforms.Resize(224),
+                                            transforms.PILToTensor(),
+                                   transforms.ConvertImageDtype(torch.float)])
         super().__init__(root=input_directory,transform=transform)
         self.norm_par = {'mean': [0.509, 0.303, 0.221],'std': [0.217, 0.164, 0.121]}
         self.api = api
@@ -114,6 +118,8 @@ class KDEF(datasets.ImageFolder):
             target = self.target_transform(target)
         match self.api:
             case 'facepp':
+                quanti = False
+                
                 soft_label = torch.ones(7)
                 if len(api_result[0]) != 1:
                     soft_label[0] = api_result[0]['anger']*0.01
@@ -126,10 +132,18 @@ class KDEF(datasets.ImageFolder):
                     # soft_label[7] = api_result[0]['CONFUSED']
 
                     hapi_label = torch.argmax(soft_label)
+                    if quanti:
+                        hapi_confidence = soft_label[int(hapi_label)]
+                        hapi_confidence = quantize_number(hapi_confidence)
+                        other_confidence = (1 - hapi_confidence)/6
+                        soft_label = torch.ones(7)*other_confidence
+                        soft_label[int(hapi_label)] = hapi_confidence
                 else:
                     soft_label = torch.ones(7)*0.14285714285714285
                     hapi_label = torch.tensor(6)
             case 'amazon':
+                quanti = False
+                
                 soft_label = torch.ones(8)
                 if len(api_result[0]) != 1:
                     soft_label[0] = api_result[0]['ANGRY']*0.01
@@ -142,6 +156,11 @@ class KDEF(datasets.ImageFolder):
                     soft_label[7] = api_result[0]['CONFUSED']*0.01
 
                     hapi_label = torch.argmax(soft_label)
+                    if quanti:
+                        hapi_confidence = quantize_number(soft_label[int(hapi_label)])
+                        other_confidence = (1 - hapi_confidence)/7
+                        soft_label = torch.ones(8)*other_confidence
+                        soft_label[int(hapi_label)] = hapi_confidence
                 else:
                     soft_label = torch.ones(8)*0.125
                     hapi_label = torch.tensor(7)        
