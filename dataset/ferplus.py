@@ -55,7 +55,7 @@ class TransformTwice:
         out2 = self.transform(inp)
         return out1, out2
 
-from .randaugment import RandAugmentMC
+# from .randaugment import RandAugmentMC
 
     
 class TransformFixMatch(object):
@@ -136,34 +136,22 @@ class FERPLUS(datasets.ImageFolder):
         self.api = api
 
         # self.norm_par = {'mean': [0.485, 0.456, 0.406],'std': [0.229, 0.224, 0.225]}
-        self.norm_par = {'mean': [0.576, 0.450, 0.402],'std': [0.265, 0.242, 0.240]}
+        self.norm_par = {'mean': [0.507,0.507, 0.507],'std': [0.250, 0.250, 0.250]}
         dic = hapi_info 
 
         dic_split = dic.split('/')
         predictions =  hapi.get_predictions(task=dic_split[0], dataset=dic_split[1], date=dic_split[3], api=dic_split[2])
 
-        self.info_lb = torch.zeros(len(self.targets) + 1,dtype=torch.long)
-        self.info_conf = torch.zeros(len(self.targets) + 1)
+        self.info_lb = torch.zeros(100000,dtype=torch.long)
+        self.info_conf = torch.zeros(100000)
 
         for i in range(len(predictions[dic])):
-            hapi_mode = predictions[dic][i]['example_id'].split('_')[0]
-            hapi_id = int(predictions[dic][i]['example_id'].split('_')[1])
-            if hapi_mode == mode:
-                self.info_lb[hapi_id] = torch.tensor((predictions[dic][i]['predicted_label']))
-                temp = predictions[dic][i]['confidence']
-                # if temp >= 0.0 and temp < 0.1:
-                #     temp = 0.0
-                # elif temp >= 0.1 and temp < 0.3:
-                #     temp = 0.2
-                # elif temp >= 0.3 and temp < 0.5:
-                #     temp = 0.4
-                # elif temp >= 0.5 and temp < 0.7:
-                #     temp = 0.6
-                # elif temp >= 0.7 and temp < 0.9:
-                #     temp = 0.8
-                # elif temp >= 0.9 and temp < 1.0:
-                #     temp = 1.0
-                self.info_conf[hapi_id] = torch.tensor((temp))
+            hapi_id = int(predictions[dic][i]['example_id'].split('fer')[1])
+
+            self.info_lb[hapi_id] = torch.tensor((predictions[dic][i]['predicted_label']))
+            temp = predictions[dic][i]['confidence']
+            
+            self.info_conf[hapi_id] = torch.tensor((temp))
 
 
 
@@ -248,7 +236,7 @@ class FERPLUS(datasets.ImageFolder):
             #     else:
             #         hapi_label = torch.tensor(1)
             case _:
-                hapi_id = torch.tensor(int(re.findall(r'_(.*).jpg', path)[0]))
+                hapi_id = torch.tensor(int(re.findall(r'/fer0(.*).png', path)[0]))
                 hapi_label = self.info_lb[hapi_id]
                 hapi_confidence = self.info_conf[hapi_id]
                 other_confidence = (1 - hapi_confidence)/6

@@ -4,8 +4,9 @@ import torch
 from kdef import KDEF
 from torch.utils.data import DataLoader
 
-from rafdb import RAFDB
+# from rafdb import RAFDB
 from expw import EXPW
+from ferplus import FERPLUS
 
 def get_mean_std(trainLoader):
     imgs = None
@@ -37,7 +38,7 @@ def get_mean_std(trainLoader):
 # train_dataset = RAFDB(input_directory=os.path.join('/data/jc/data/image/RAFDB',"train"),hapi_data_dir='/home/jkl6486/HAPI',hapi_info='fer/rafdb/microsoft_fer/22-05-23',api=None,transform='raw')
 # 0.57626146 0.45022875 0.4018132
 # 0.2648825 0.2420428 0.24043667
-test_dataset = RAFDB(input_directory=os.path.join('/data/jc/data/image/RAFDB',"valid"),hapi_data_dir='/home/jkl6486/HAPI',hapi_info='fer/rafdb/microsoft_fer/22-05-23',api=None,transform='raw')
+test_dataset = FERPLUS(input_directory=os.path.join('/data/jc/data/image/ferplus_hapi',"valid"),hapi_data_dir='/home/jkl6486/HAPI',hapi_info='fer/ferplus/microsoft_fer/22-05-23',api=None,transform='raw')
 # 0.5781266 0.44904223 0.39968655
 # 0.26359147 0.24013287 0.23899896
 

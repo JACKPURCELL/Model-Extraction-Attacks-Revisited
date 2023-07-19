@@ -7,7 +7,7 @@ import os
 
 from tqdm import trange
 client = boto3.client('rekognition')
-def detect_faces(dirpath,file):
+def detect_faces(basepath,dirpath,file):
     if not os.path.exists(os.path.join(dirpath, 'amazon_api', file)):
         # print("quote")
         """Detects faces in an image."""
@@ -38,32 +38,31 @@ def detect_faces(dirpath,file):
             
                 data = json.dumps(data)
                 origin = 'null'
-            with open(os.path.join(dirpath, 'amazon_api', file), mode='w') as f:
+            with open(os.path.join(basepath, 'amazon_api', file), mode='w') as f:
                 f.write(data)
-            with open(os.path.join(dirpath, 'amazon_api_origin', file), mode='w') as f:
+            with open(os.path.join(basepath, 'amazon_api_origin', file), mode='w') as f:
                 f.write(origin)
             
 
+try:        
+    os.mkdir(os.path.join('/data/jc/data/image/ferplus_hapi', 'amazon_api'))
+    os.mkdir(os.path.join('/data/jc/data/image/ferplus_hapi', 'amazon_api_origin'))
+except:
+    pass
 
 for label in range(7):
-    path = os.path.join('/data/jc/data/image/RAFDB/train', str(label))        
-    try:        
-        os.mkdir(os.path.join(path, 'amazon_api'))
-        os.mkdir(os.path.join(path, 'amazon_api_origin'))
-    except:
-        pass
+    basepath = '/data/jc/data/image/ferplus_hapi'
+    path = os.path.join(basepath, 'train',str(label))        
+
     files = [f for f in os.listdir(path)
                         if os.path.isfile(os.path.join(path, f))]
     for i in trange(len(files), desc='requesting amazon api', leave=True):        
-        detect_faces(path,files[i])        
-    
-    path = os.path.join('/data/jc/data/image/RAFDB/valid', str(label))
-    try:        
-        os.mkdir(os.path.join(path, 'amazon_api'))
-        os.mkdir(os.path.join(path, 'amazon_api_origin'))
-    except:
-        pass
+        detect_faces(basepath,path,files[i])        
+        
+
+    path = os.path.join(basepath,'valid',str(label))
+   
     files = [f for f in os.listdir(path)
                         if os.path.isfile(os.path.join(path, f))]
     for i in trange(len(files), desc='requesting amazon api', leave=True):        
-        detect_faces(path,files[i])      
+        detect_faces(basepath,path,files[i])      
