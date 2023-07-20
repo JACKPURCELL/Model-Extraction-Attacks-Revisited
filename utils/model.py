@@ -1129,7 +1129,6 @@ def distillation(module: nn.Module, pgd_set, num_classes: int,
                     case 'sentiment':
                         _output = _output[:, :2]
                         new_num_classes = 2
-                        new_num_classes = num_classes
                         
                     case 'emotion':
                         new_num_classes = num_classes
@@ -1436,7 +1435,6 @@ def dis_validate(module: nn.Module, num_classes: int,
                 case 'sentiment':
                     _output = _output[:, :2]
                     new_num_classes = 2
-                    new_num_classes = num_classes                    
                 case 'emotion':
                     new_num_classes = num_classes
             gt_acc1, gt_acc5 = accuracy_fn(
@@ -1534,7 +1532,6 @@ def dis_validate(module: nn.Module, num_classes: int,
                     case 'sentiment':
                         _output = _output[:, :2]
                         new_num_classes = 2
-                        new_num_classes = num_classes
                         
                     case 'emotion':
                         new_num_classes = num_classes
