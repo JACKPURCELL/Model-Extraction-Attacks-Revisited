@@ -43,7 +43,7 @@ class YELP(Dataset):
 
     """
     def __init__(self, input_directory,tokenizer,retokenize,api,max_length,log_dir):
-        self.input_directory = input_directory
+        self.base = '/data/jc/data/sentiment/YELP'
         self.positive_path = os.path.join(input_directory, 'pos')
         self.positive_files = [f for f in os.listdir(self.positive_path)
                                if os.path.isfile(os.path.join(self.positive_path, f))]
@@ -136,10 +136,10 @@ class YELP(Dataset):
                 example = pickle.load(file=f)
             match self.api:
                 case 'amazon':
-                    with open(os.path.join(self.input_directory, 'amazon_api', file), mode='rb') as p:
+                    with open(os.path.join(self.base, 'amazon_api', file), mode='rb') as p:
                         api_result = json.load(p)
                 case 'microsoft':
-                    with open(os.path.join(self.input_directory, 'mic_api_2022-11-01', file), mode='rb') as p:
+                    with open(os.path.join(self.base, 'mic_api_2022-11-01', file), mode='rb') as p:
                         api_result = json.load(p)
                 case _:
                     pass
@@ -150,10 +150,10 @@ class YELP(Dataset):
                 example = pickle.load(file=f)
             match self.api:
                 case 'amazon':
-                    with open(os.path.join(self.input_directory, 'amazon_api', file), mode='rb') as p:
+                    with open(os.path.join(self.base, 'amazon_api', file), mode='rb') as p:
                         api_result = json.load(p)
                 case 'microsoft':
-                    with open(os.path.join(self.input_directory, 'mic_api_2022-11-01', file), mode='rb') as p:
+                    with open(os.path.join(self.base, 'mic_api_2022-11-01', file), mode='rb') as p:
                         api_result = json.load(p)
                 case _:
                     pass
