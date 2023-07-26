@@ -28,8 +28,16 @@ class XLNet(nn.Module):
     def __init__(self,  num_classes=2, model_name = "xlnet-base-cased",**kwargs):
         super(XLNet, self).__init__()
 
+        # Create a configuration object
+        # config = XLNetConfig(
+        #     num_labels=num_classes,  # The number of classes for sequence classification
+        #     # Add any other configuration parameters you need
+        # )
 
+        # # Initialize a new XLNet model from scratch with the custom configuration
         self.model = XLNetForSequenceClassification.from_pretrained(model_name, num_labels=num_classes).cuda()
+
+        # self.model = XLNetForSequenceClassification(config=config).cuda()
 
         self.model_name = 'xlnet'
         self.tokenizer = XLNetTokenizer.from_pretrained(model_name)
