@@ -6,8 +6,8 @@ import os
 # mic_api_2022-11-01
 from tqdm import trange
 # This example requires environment variables named "LANGUAGE_KEY" and "LANGUAGE_ENDPOINT"
-language_key = '30a6cca823254b4f9251a37934c4cf32'
-language_endpoint = 'https://hapitwtw.cognitiveservices.azure.com/'
+language_key = '933e65d252d549e3b04a8b26ecb81dfe'
+language_endpoint = 'https://sentimenttw.cognitiveservices.azure.com/'
 
 from azure.ai.textanalytics import TextAnalyticsClient
 from azure.core.credentials import AzureKeyCredential
@@ -17,7 +17,7 @@ def authenticate_client():
     ta_credential = AzureKeyCredential(language_key)
     text_analytics_client = TextAnalyticsClient(
             endpoint=language_endpoint, 
-            credential=ta_credential,model_version='2021-10-01')
+            credential=ta_credential,model_version='2022-11-01')
     return text_analytics_client
 
 client = authenticate_client()
@@ -44,11 +44,11 @@ def sentiment_analysis(documents):
     return data,result
    
           
-mic_api_path = 'mic_api_2021-10-01'
-mic_api_ori_path = 'mic_api_ori_2021-10-01'
+mic_api_path = 'mic_api_2022-11-01'
+mic_api_ori_path = 'mic_api_ori_2022-11-01'
 
-
-input_directory = '/data/jc/data/sentiment/IMDB/aclImdb/train'
+base_path = '/data/jc/data/sentiment/YELP'
+input_directory = '/data/jc/data/sentiment/YELP/valid'
 positive_path = os.path.join(input_directory, 'pos')
 positive_files = [f for f in os.listdir(positive_path)
                         if os.path.isfile(os.path.join(positive_path, f))]
@@ -60,14 +60,14 @@ negative_files = [f for f in os.listdir(negative_path)
 num_negative_examples = len(negative_files)
         
 try:        
-    os.mkdir(os.path.join(positive_path, mic_api_path))
-    os.mkdir(os.path.join(positive_path, mic_api_ori_path))
+    os.mkdir(os.path.join(base_path, mic_api_path))
+    os.mkdir(os.path.join(base_path, mic_api_ori_path))
 except:
     pass
 for i in trange(len(positive_files), desc='Tokenizing & Encoding Positive Reviews',
                 leave=True):
     file = positive_files[i]
-    if not os.path.exists(os.path.join(positive_path, mic_api_path, file)):
+    if not os.path.exists(os.path.join(base_path, mic_api_path, file)):
         with open(os.path.join(positive_path, file), mode='r', encoding='utf8') as f:
             example = f.read()
 
@@ -79,15 +79,35 @@ for i in trange(len(positive_files), desc='Tokenizing & Encoding Positive Review
 
         data,result = sentiment_analysis([example])
 
-        with open(os.path.join(positive_path, mic_api_path, file), mode='w') as f:
+        with open(os.path.join(base_path, mic_api_path, file), mode='w') as f:
             f.write(data)
-        with open(os.path.join(positive_path, mic_api_ori_path, file), mode='wb') as f:
+        with open(os.path.join(base_path, mic_api_ori_path, file), mode='wb') as f:
             pickle.dump(result, f)
-try:
-    os.mkdir(os.path.join(negative_path, mic_api_ori_path))
-    os.mkdir(os.path.join(negative_path, mic_api_path))
-except:
-    pass
+            
+for i in trange(len(negative_files), desc='Tokenizing & Encoding negetive Reviews',
+                leave=True):
+    file = negative_files[i]
+    if not os.path.exists(os.path.join(base_path, mic_api_path, file)):
+        with open(os.path.join(negative_path, file), mode='r', encoding='utf8') as f:
+            example = f.read()
+
+        example = re.sub(r'<br />', '', example)
+        example = example.lstrip().rstrip()
+        example = re.sub(' +', ' ', example)
+        if len(example) > 4950:
+            example=example[:4950]
+
+        data,result = sentiment_analysis([example])
+
+        with open(os.path.join(base_path, mic_api_path, file), mode='w') as f:
+            f.write(data)
+        with open(os.path.join(base_path, mic_api_ori_path, file), mode='wb') as f:
+            pickle.dump(result, f)            
+# try:
+#     os.mkdir(os.path.join(negative_path, mic_api_ori_path))
+#     os.mkdir(os.path.join(negative_path, mic_api_path))
+# except:
+#     pass
 # for i in trange(len(negative_files), desc='Tokenizing & Encoding negative_files Reviews',
 #                 leave=True):
 #     file = negative_files[i]

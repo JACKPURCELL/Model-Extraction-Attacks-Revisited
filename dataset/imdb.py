@@ -150,6 +150,9 @@ class IMDB(Dataset):
                 case 'amazon':
                     with open(os.path.join(self.positive_path, 'amazon_api', file), mode='rb') as p:
                         api_result = json.load(p)
+                case 'amazon_likehapi':
+                    with open(os.path.join(self.positive_path, 'amazon_api', file), mode='rb') as p:
+                        api_result = json.load(p)
                 case 'microsoft':
                     with open(os.path.join(self.positive_path, 'mic_api_2022-11-01', file), mode='rb') as p:
                         api_result = json.load(p)
@@ -162,6 +165,9 @@ class IMDB(Dataset):
                 example = pickle.load(file=f)
             match self.api:
                 case 'amazon':
+                    with open(os.path.join(self.negative_path, 'amazon_api', file), mode='rb') as p:
+                        api_result = json.load(p)
+                case 'amazon_likehapi':
                     with open(os.path.join(self.negative_path, 'amazon_api', file), mode='rb') as p:
                         api_result = json.load(p)
                 case 'microsoft':
@@ -183,7 +189,23 @@ class IMDB(Dataset):
                 # if soft_label[0] >= soft_label[1]:
                 #     hapi_label = torch.tensor(0)
                 # else:
-                #     hapi_label = torch.tensor(1)  
+                #     hapi_label = torch.tensor(1)
+                
+            case 'amazon_likehapi':
+                hapi_confidence = max(api_result['SentimentScore']['Positive'], api_result['SentimentScore']['Negative'])
+                if api_result['SentimentScore']['Positive']>api_result['SentimentScore']['Negative']:
+                    hapi_label = torch.tensor(0)
+                else:
+                    hapi_label = torch.tensor(1)
+                if hapi_confidence >= 0.3333333333333333:
+                    other_confidence = (1 - hapi_confidence)*0.5
+                    soft_label = torch.ones(3)*other_confidence
+                    soft_label[int(hapi_label)] = hapi_confidence
+                else:
+                    other_confidence = 1 - hapi_confidence
+                    soft_label = torch.zeros(3)
+                    soft_label[int(hapi_label)] = hapi_confidence
+                    soft_label[2] = other_confidence  
             case 'microsoft':
                 soft_label = torch.ones(3)
                 soft_label[0] = api_result[0]['positive']
