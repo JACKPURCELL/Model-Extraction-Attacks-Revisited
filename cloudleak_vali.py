@@ -17,7 +17,8 @@ from torch.utils.data import DataLoader
 
 # !pip install pytorch_transformers
 # from pytorch_transformers import AdamW
-from dataset.expw import EXPW  # Adam's optimization w/ fixed weight decay
+from dataset.expw import EXPW
+from dataset.ferplus import FERPLUS  # Adam's optimization w/ fixed weight decay
 
 from dataset.imdb import IMDB
 from dataset.rafdb import RAFDB
@@ -134,6 +135,10 @@ else:
 if args.dataset == 'rafdb':
     train_dataset = RAFDB(input_directory=os.path.join('/data/jc/data/image/RAFDB',"train"),hapi_data_dir=args.hapi_data_dir,hapi_info=args.hapi_info,api=args.api,transform=transform)
     test_dataset = RAFDB(input_directory=os.path.join('/data/jc/data/image/RAFDB',"valid"),hapi_data_dir=args.hapi_data_dir,hapi_info=args.hapi_info,api=args.api,transform=transform)
+    task = 'emotion'
+elif args.dataset == 'ferplus':
+    train_dataset = FERPLUS(input_directory=os.path.join('/data/jc/data/image/ferplus_hapi',"train"),hapi_data_dir=args.hapi_data_dir,hapi_info=args.hapi_info,api=args.api,transform=transform)
+    test_dataset = FERPLUS(input_directory=os.path.join('/data/jc/data/image/ferplus_hapi',"valid"),hapi_data_dir=args.hapi_data_dir,hapi_info=args.hapi_info,api=args.api,transform=transform)
     task = 'emotion'
 elif args.dataset == 'kdef':
     train_dataset = KDEF(input_directory=os.path.join('/data/jc/data/image/KDEF_and_AKDEF/KDEF_spilit',"train"),hapi_data_dir=args.hapi_data_dir,hapi_info=args.hapi_info,api=args.api,transform=transform)
