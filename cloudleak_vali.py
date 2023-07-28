@@ -180,7 +180,7 @@ else:
 if 'resnet' in args.model:
     model = getattr(models,'resnet')(norm_par=train_dataset.norm_par,model_name=args.model,num_classes=args.num_classes,path=args.model_path)
 elif 'xlnet' in args.model:
-    model = getattr(models,'xlnet')(model_name=args.model,num_classes=args.num_classes)
+    model = getattr(models,'xlnet')(model_name=args.model,num_classes=args.num_classes,path=args.model_path)
 elif 'vit' in args.model:
     model = getattr(models,'vit')(norm_par=train_dataset.norm_par,model_name=args.model,num_classes=args.num_classes)
 elif 'roberta' in args.model:

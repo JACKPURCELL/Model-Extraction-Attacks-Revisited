@@ -25,7 +25,7 @@ TOKENIZERS_PARALLELISIM = True
 
 class XLNet(nn.Module):
 
-    def __init__(self,  num_classes=2, model_name = "xlnet-base-cased",**kwargs):
+    def __init__(self,  num_classes=2, model_name = "xlnet-base-cased",path=None,**kwargs):
         super(XLNet, self).__init__()
 
         # Create a configuration object
@@ -36,7 +36,7 @@ class XLNet(nn.Module):
 
         # # Initialize a new XLNet model from scratch with the custom configuration
         self.model = XLNetForSequenceClassification.from_pretrained(model_name, num_labels=num_classes).cuda()
-
+        self.load_state_dict(path)
         # self.model = XLNetForSequenceClassification(config=config).cuda()
 
         self.model_name = 'xlnet'
@@ -48,7 +48,31 @@ class XLNet(nn.Module):
         return self.model(input_ids=input_ids,token_type_ids=token_type_ids,attention_mask=attention_mask).logits
     
         
+    def load_state_dict(self, fname):
+        """
+        Set parameters converted from Caffe models authors of VGGFace2 provide.
+        See https://www.robots.ox.ac.uk/~vgg/data/vgg_face2/.
+        Arguments:
+            model: model
+            fname: file name of parameters converted from a Caffe model, assuming the file format is Pickle.
+        """
 
+        weights = torch.load(fname)
+
+        own_state = self.model.state_dict()
+        for name, param in weights.items():
+            if 'model.module.' in name:
+                name = name.split('model.module.')[1]
+                if name in own_state:
+                    try:
+                        own_state[name].copy_(param)
+                    except Exception:
+                        raise RuntimeError('While copying the parameter named {}, whose dimensions in the model are {} and whose '\
+                                        'dimensions in the checkpoint are {}.'.format(name, own_state[name].size(), param.size()))
+                else:
+                    raise KeyError('unexpected key "{}" in state_dict'.format(name))
+
+        
         
     def define_optimizer(
             self, parameters: str | Iterator[nn.Parameter] = 'partial',

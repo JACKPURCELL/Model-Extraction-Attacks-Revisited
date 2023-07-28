@@ -230,7 +230,7 @@
             "env":{
                 "CUDA_VISIBLE_DEVICES":"0"
             },
-            "args":["--model_path","/home/jkl6486/hermes/exp_mix/17_23_1688_re/model.pth","--hapi_info","fer/expw/microsoft_fer/22-05-23","--optimizer","Lion","--epochs","200","--log_dir","aaa","--n_sample","64","--sample_times","37","--lr_warmup_epoch","75","--adaptive","cloudleak","--batch_size","64","--model","resnet50","--lr","3e-4","--op_parameters","full","--validate_interval","1","--num_classes","8","--dataset","expw","--lr_scheduler","--save","--api","amazon"
+            "args":["--model_path","/home/jkl6486/hermes/exp_mix/23_xll_23_lion_e6_full_c3_newgt/model.pth","--hapi_info","fer/expw/microsoft_fer/22-05-23","--optimizer","Lion","--epochs","200","--log_dir","aaa","--n_sample","64","--sample_times","37","--lr_warmup_epoch","75","--adaptive","cloudleak","--batch_size","64","--model","xlnet-large-cased","--lr","3e-4","--op_parameters","full","--validate_interval","1","--num_classes","3","--dataset","imdb","--lr_scheduler","--save","--api","amazon"
         ]
 
         },
