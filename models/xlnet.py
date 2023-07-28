@@ -36,7 +36,8 @@ class XLNet(nn.Module):
 
         # # Initialize a new XLNet model from scratch with the custom configuration
         self.model = XLNetForSequenceClassification.from_pretrained(model_name, num_labels=num_classes).cuda()
-        self.load_state_dict(path)
+        if path is not None:
+            self.load_state_dict(path)
         # self.model = XLNetForSequenceClassification(config=config).cuda()
 
         self.model_name = 'xlnet'
