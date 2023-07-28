@@ -24,6 +24,7 @@ from dataset.imdb import IMDB
 from dataset.rafdb import RAFDB
 from dataset.kdef import KDEF
 from dataset.cifar import CIFAR10
+from dataset.yelp import YELP
 from utils.cloudleak import distillation,train,validate
 from torch.utils.data import Dataset,Subset
 
@@ -209,7 +210,11 @@ if args.dataset == 'imdb':
         train_dataset = IMDB(input_directory=os.path.join(path,"aclImdb/test"),tokenizer=model.tokenizer,hapi_data_dir=args.hapi_data_dir,hapi_info=args.hapi_info,retokenize=args.retokenize,api=args.api,max_length=args.max_length,log_dir=args.log_dir)
         test_dataset = IMDB(input_directory=os.path.join(path,"aclImdb/train"),tokenizer=model.tokenizer,hapi_data_dir=args.hapi_data_dir,hapi_info=args.hapi_info,retokenize=args.retokenize,api=args.api,max_length=args.max_length,log_dir=args.log_dir)
     task = 'sentiment'
-
+elif args.dataset == 'yelp':
+    path =  '/data/jc/data/sentiment/YELP/'
+    train_dataset = YELP(input_directory=os.path.join(path,"train"),tokenizer=model.tokenizer,retokenize=args.retokenize,api=args.api,max_length=args.max_length,log_dir=args.log_dir)
+    test_dataset = YELP(input_directory=os.path.join(path,"valid"),tokenizer=model.tokenizer,retokenize=args.retokenize,api=args.api,max_length=args.max_length,log_dir=args.log_dir)
+    task = 'sentiment'
 def get_sampler(train_dataset):
     from collections import Counter
     from torch.utils.data.sampler import WeightedRandomSampler    
