@@ -24,7 +24,22 @@
         ]
 
 
-        },        
+        },      
+        {
+            "name": "cloudleak_main.py",
+            "type": "python",
+            "request": "launch",
+            "program": "cloudleak_main.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "env":{
+                "CUDA_VISIBLE_DEVICES":"0"
+            },
+            "args":["--adv_percent","0.333332","--optimizer","Lion","--epochs","264","--adv_train","pgd","--log_dir","pgd_kdef_facepp_32sample","--n_sample","64","--sample_times","32","--lr_warmup_epoch","64","--adaptive","cloudleak","--batch_size","64","--model","resnet50","--lr","3e-4","--op_parameters","full","--validate_interval","1","--num_classes","7","--dataset","kdef","--lr_scheduler","--save","--api","facepp"
+        ]
+
+
+        },      
         {
             "name": "mainroberta.py",
             "type": "python",

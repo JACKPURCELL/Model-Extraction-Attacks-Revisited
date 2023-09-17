@@ -524,7 +524,7 @@ def distillation(module: nn.Module, pgd_set, num_classes: int,
                  n_samples=None, adaptive=None, get_sampler_fn=None,
                  balance=False, sample_times=10, tea_model=None, AE=None, encoder_attack=False,
                  pgd_percent=None,
-                 encoder_train=False,train_dataset=None,
+                 encoder_train=False,train_dataset=None,adv_percent=-1,
                 workers=8,
                  **kwargs):
     r"""Train the model"""
@@ -630,10 +630,24 @@ def distillation(module: nn.Module, pgd_set, num_classes: int,
                 dst_subset = torch.utils.data.Subset(train_dataset, selection_result)
                 loader_dst = torch.utils.data.DataLoader(dst_subset, batch_size=batch_size, shuffle=False,
                                                         num_workers=workers, pin_memory=True,drop_last=False)
-
+                if adv_percent != -1:
+                    clean_num = int(n_samples/(1+adv_percent))
+                    adv_num = n_samples - clean_num
+                    print("clean_num: ",clean_num,"  adv_num: ",adv_num)
+                
                 for i,data in enumerate(loader_dst):
-                    input_batch,_,_,hapi_label = data
+                    input_batch, _label, _soft_label, hapi_label= data
+
+
                     input_batch = input_batch.cuda()
+                    if adv_percent != -1:
+                        clean_x = input_batch[adv_num:]
+                        clean_adv_x = input_batch[adv_num:]
+                        clean_adv_soft_label = _soft_label[adv_num:]
+                        clean_adv_hapi_label = hapi_label[adv_num:]
+                        input_batch = input_batch[:adv_num]
+                        
+                        
                     with torch.no_grad():
                         _output=forward_fn(input_batch)
                     # generate adv_x and query
@@ -655,6 +669,11 @@ def distillation(module: nn.Module, pgd_set, num_classes: int,
                         Synthetic_adv_x = torch.cat((Synthetic_adv_x,adv_x),dim=0) 
                         Synthetic_adv_soft_label = torch.cat((Synthetic_adv_soft_label,_adv_soft_label),dim=0)  
                         Synthetic_adv_hapi_label = torch.cat((Synthetic_adv_hapi_label,_adv_hapi_label),dim=0)  
+                    if adv_percent != -1:
+                        Synthetic_x = torch.cat((Synthetic_x,clean_x),dim=0) 
+                        Synthetic_adv_x = torch.cat((Synthetic_adv_x,clean_adv_x),dim=0) 
+                        Synthetic_adv_soft_label = torch.cat((Synthetic_adv_soft_label,clean_adv_soft_label),dim=0)  
+                        Synthetic_adv_hapi_label = torch.cat((Synthetic_adv_hapi_label,clean_adv_hapi_label),dim=0)  
                 adv_dataset = advdataset(Synthetic_x.cpu(),Synthetic_adv_x.cpu(), Synthetic_adv_soft_label.cpu(),Synthetic_adv_hapi_label.cpu())
                 loader_train = torch.utils.data.DataLoader(adv_dataset, batch_size=batch_size, shuffle=True,
                                                         num_workers=workers, pin_memory=True,drop_last=False)
