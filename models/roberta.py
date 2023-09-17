@@ -1,5 +1,5 @@
 
-from transformers import RobertaTokenizer, RobertaModel
+from transformers import RobertaTokenizer, RobertaModel, RobertaConfig
 
 #!/usr/bin/env python3
 
@@ -28,6 +28,21 @@ class ROBERTA(nn.Module):
     def __init__(self, model_name: str = 'roberta-large', num_classes=2, **kwargs):
         super(ROBERTA, self).__init__()
 
+        # config = RobertaConfig()    
+        
+
+        # self.model = RobertaModel(config).cuda()
+        # self.model_name ='roberta'
+        # in_features = 1024 if 'large' in model_name else 768
+        # self.tokenizer = RobertaTokenizer.from_pretrained(model_name)
+        # module_list: list[nn.Module] = []
+        # module_list.extend([('first_dropout',nn.Identity()),
+        #                     ('last_dropout',nn.Dropout(p=0.1, inplace=False)),
+        #                     ('logits_proj',nn.Linear(in_features=in_features, out_features=num_classes, bias=True).cuda())])
+        # self.classifier = nn.Sequential(OrderedDict(module_list)).cuda()
+        
+        
+        
 
         self.model = RobertaModel.from_pretrained(model_name,num_labels=num_classes).cuda()
         self.model_name ='roberta'
@@ -38,8 +53,8 @@ class ROBERTA(nn.Module):
                             ('last_dropout',nn.Dropout(p=0.1, inplace=False)),
                             ('logits_proj',nn.Linear(in_features=in_features, out_features=num_classes, bias=True).cuda())])
         self.classifier = nn.Sequential(OrderedDict(module_list))
-        
-        
+
+
     def forward(self, input_ids,attention_mask):
 
         output = self.model(input_ids=input_ids,attention_mask=attention_mask).pooler_output
