@@ -77,6 +77,8 @@ parser.add_argument('--split_label_percent', type=float, default=1.0)
 
 parser.add_argument('--unlabel_batch', type=int, default=-1)
 parser.add_argument('--label_batch', type=int, default=-1)
+#adv:clean 64:0 48:16=3 32:32=1 16:48=1/3
+parser.add_argument('--adv_percent', type=float, default=-1)
 
 parser.add_argument('--pgd_percent', type=float)
 parser.add_argument('--balance', action='store_true')
@@ -361,4 +363,4 @@ distillation(module=model,pgd_set = test_dataset,adv_train=args.adv_train,num_cl
              batch_size=args.batch_size,num_workers=args.num_workers,
              n_samples = args.n_samples,adaptive=args.adaptive,get_sampler_fn=get_sampler,
              balance=args.balance,sample_times=args.sample_times,tea_model=tea_model,AE=AE,encoder_attack=args.encoder_attack,pgd_percent=args.pgd_percent,
-             encoder_train=args.encoder_train,train_dataset=train_dataset,workers=args.num_workers)
+             encoder_train=args.encoder_train,adv_percent=args.adv_percent,train_dataset=train_dataset,workers=args.num_workers)

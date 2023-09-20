@@ -89,7 +89,23 @@ class TransformFixMatch(object):
         return self.normalize(weak), self.normalize(strong)
     
 def quantize_number(num):
-    return torch.round((num + 0.1) / 0.2) * 0.2 - 0.1           
+    if num == 1/7 or num == 1/8:
+        return num
+        
+    if num >= 0.9:
+        q_num =1
+    elif num >= 0.7:
+        q_num =0.8
+    elif num >= 0.5:
+        q_num =0.6
+    elif num >= 0.3:
+        q_num =0.4
+    elif num>= 0.125:
+        q_num =0.2
+    else:
+        q_num =0    
+    return torch.tensor(q_num)
+    # return torch.round((num + 0.1) / 0.2) * 0.2 - 0.1           
 class FERPLUS(datasets.ImageFolder):
     
     def __init__(self, input_directory=None, hapi_data_dir:str = None, hapi_info:str = None, api=None,transform='Normal'):
@@ -179,7 +195,7 @@ class FERPLUS(datasets.ImageFolder):
             target = self.target_transform(target)
         match self.api:
             case 'facepp':
-                quanti = False
+                quanti = True
                 soft_label = torch.ones(7)
                 if len(api_result[0]) != 1:
                     soft_label[0] = api_result[0]['anger']*0.01
@@ -204,7 +220,7 @@ class FERPLUS(datasets.ImageFolder):
                     hapi_label = torch.tensor(6)
             case 'amazon':
                 soft_label = torch.ones(8)
-                quanti = False
+                quanti = True
                 
                 if len(api_result[0]) != 1:
                     soft_label[0] = api_result[0]['ANGRY']*0.01

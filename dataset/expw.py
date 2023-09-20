@@ -53,7 +53,23 @@ class TransformTwice:
         out1 = self.transform(inp)
         out2 = self.transform(inp)
         return out1, out2
-       
+def quantize_number(num):
+    if num == 1/7 or num == 1/8:
+        return num
+        
+    if num >= 0.9:
+        q_num =1
+    elif num >= 0.7:
+        q_num =0.8
+    elif num >= 0.5:
+        q_num =0.6
+    elif num >= 0.3:
+        q_num =0.4
+    elif num>= 0.125:
+        q_num =0.2
+    else:
+        q_num =0    
+    return torch.tensor(q_num)       
        
 class EXPW(datasets.ImageFolder):
     
@@ -128,6 +144,8 @@ class EXPW(datasets.ImageFolder):
             target = self.target_transform(target)
         match self.api:
             case 'facepp':
+                quanti = True
+                
                 soft_label = torch.ones(7)
                 if len(api_result[0]) != 1:
                     soft_label[0] = api_result[0]['anger']*0.01
@@ -140,10 +158,18 @@ class EXPW(datasets.ImageFolder):
                     # soft_label[7] = api_result[0]['CONFUSED']
 
                     hapi_label = torch.argmax(soft_label)
+                    if quanti:
+                        hapi_confidence = soft_label[int(hapi_label)]
+                        hapi_confidence = quantize_number(hapi_confidence)
+                        other_confidence = (1 - hapi_confidence)/6
+                        soft_label = torch.ones(7)*other_confidence
+                        soft_label[int(hapi_label)] = hapi_confidence
                 else:
                     soft_label = torch.ones(7)*0.14285714285714285
                     hapi_label = torch.tensor(6)
             case 'amazon':
+                quanti = True
+                
                 soft_label = torch.ones(8)
                 if len(api_result[0]) != 1:
                     soft_label[0] = api_result[0]['ANGRY']*0.01
@@ -156,6 +182,11 @@ class EXPW(datasets.ImageFolder):
                     soft_label[7] = api_result[0]['CONFUSED'] *0.01
 
                     hapi_label = torch.argmax(soft_label)
+                    if quanti:
+                        hapi_confidence = quantize_number(soft_label[int(hapi_label)])
+                        other_confidence = (1 - hapi_confidence)/7
+                        soft_label = torch.ones(8)*other_confidence
+                        soft_label[int(hapi_label)] = hapi_confidence
                 else:
                     soft_label = torch.ones(8)*0.125
                     hapi_label = torch.tensor(7)  
