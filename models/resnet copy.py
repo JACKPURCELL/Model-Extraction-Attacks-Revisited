@@ -16,7 +16,27 @@ from adversirial.pgd import PGD
 from optimizer.lion import Lion
 from torchvision import transforms
 
-        
+        # group.add_argument('--adv_train', choices=[None, 'pgd', 'free', 'trades'],
+        #                    help='adversarial training (default: None)')
+        # group.add_argument('--adv_train_random_init', action='store_true')
+        # group.add_argument('--adv_train_iter', type=int,
+        #                    help='adversarial training PGD iteration (default: 7).')
+        # group.add_argument('--adv_train_alpha', type=float,
+        #                    help='adversarial training PGD alpha (default: 2/255).')
+        # group.add_argument('--adv_train_eps', type=float,
+        #                    help='adversarial training PGD eps (default: 8/255).')
+        # group.add_argument('--adv_train_eval_iter', type=int)
+        # group.add_argument('--adv_train_eval_alpha', type=float)
+        # group.add_argument('--adv_train_eval_eps', type=float)
+        # group.add_argument('--adv_train_trades_beta', type=float,
+        #                    help='regularization, i.e., 1/lambda in TRADES '
+        #                    '(default: 6.0)')
+
+        # group.add_argument('--norm_layer', choices=['bn', 'gn'], default='bn')
+        # group.add_argument('--sgm', action='store_true',
+        #                    help='whether to use sgm gradient (default: False)')
+        # group.add_argument('--sgm_gamma', type=float,
+        #                    help='sgm gamma (default: 1.0)')
 class ResNet(nn.Module):
 
     def __init__(self, norm_par=None,model_name: str = 'resnet50',record_embedding=False,num_classes=7,path=None):
@@ -57,6 +77,7 @@ class ResNet(nn.Module):
                          ])
         self.classifier = nn.Sequential(OrderedDict(module_list)).cuda()
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1)).cuda()
+        self.embedding_recorder = EmbeddingRecorder(record_embedding).cuda()
         if path is not None:
             self.load_state_dict(path)
 
@@ -129,6 +150,7 @@ class ResNet(nn.Module):
         x = self.features(x)
         x = self.avgpool(x)
         x = torch.flatten(x, 1)
+        x = self.embedding_recorder(x)
         x = self.classifier(x)
         return x
 

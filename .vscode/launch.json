@@ -6,6 +6,20 @@
     "configurations": [
 
 
+        {
+            "name": "datafree.py",
+            "type": "python",
+            "request": "launch",
+            "program": "datafree_main.py",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "env":{
+                "CUDA_VISIBLE_DEVICES":"3"
+            },
+            "args":["--log_dir","test","--lr_scheduler","--batch_size","64","--model","resnet50","--grad_clip","3.0","--lr","3e-4","--op_parameters","full","--validate_interval","1","--num_classes","8","--dataset","kdef","--hapi_info","fer/rafdb/microsoft_fer/22-05-23","--api","amazon"]
+
+
+        },
 
 
 
