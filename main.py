@@ -93,7 +93,7 @@ parser.add_argument('--api', type=str)
 parser.add_argument('--lr_scheduler_freq', type=str,default='epoch')
 parser.add_argument('--adv_train', choices=[None, 'pgd', 'free', 'cw'],
                            help='adversarial training (default: None)')
-parser.add_argument('--adv_valid', action='store_true')
+parser.add_argument('--adv_valid', choices=[None, 'pgd', 'free', 'cw'])
 parser.add_argument('--encoder_train', action='store_true')
 parser.add_argument('--encoder_path',  type=str)
 parser.add_argument('--encoder_attack', action='store_true')
@@ -177,7 +177,7 @@ if args.log_dir is None:
     if args.lr_scheduler:
         log_dir += "_lrsche"
 else:
-    log_dir = 'noaug/'+args.log_dir
+    log_dir = 'exp_adp/'+args.log_dir
     
 if 'resnet' in args.model:
     model = getattr(models,'resnet')(norm_par=train_dataset.norm_par,model_name=args.model,num_classes=args.num_classes)

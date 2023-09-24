@@ -434,7 +434,7 @@ from torchvision.utils import save_image
 
 
 
-def get_api(_input, x, indices, api='amazon', tea_model=None):
+def get_api(x, indices, _input=None,api='amazon', tea_model=None):
     adv_x_num = 500
 
     # define a transform to convert a tensor to PIL image
@@ -459,9 +459,9 @@ def get_api(_input, x, indices, api='amazon', tea_model=None):
         # img:Image = transform(x[i,:,:,:])
         # img_input:Image = transform(_input[i,:,:,:])
         path = os.path.join('/data/jc/data/image/adv_x', str(adv_x_num) + '.png')
-        path_input = os.path.join('/data/jc/data/image/adv_x', str(adv_x_num) + '_input.png')
+        # path_input = os.path.join('/data/jc/data/image/adv_x', str(adv_x_num) + '_input.png')
         save_image(x[i, :, :, :], path, 'png')
-        save_image(_input[i, :, :, :], path_input, 'png')
+        # save_image(_input[i, :, :, :], path_input, 'png')
         # path_b = os.path.join('/data/jc/data/image/adv_x', str(adv_x_num)+'b'+'.png')
         # path_input_b = os.path.join('/data/jc/data/image/adv_x', str(adv_x_num)+'b'+'_input.png')
         # save_image_b(x[i,:,:,:],path_b)
@@ -675,7 +675,7 @@ def distillation(module: nn.Module, pgd_set, num_classes: int,
             return index[select_result].tolist()
 
 
-    if adv_train is not None or adv_valid:
+    if adv_train is not None:
 
 
         if adv_train == 'pgd':
@@ -741,7 +741,7 @@ def distillation(module: nn.Module, pgd_set, num_classes: int,
                 raise NotImplementedError(f'{adv_train=} is not supported yet.')
 
             adv_x, _adv_soft_label, _adv_hapi_label, new_indices = get_api(
-                selected_data if ori_img is None else selected_ori_img, adv_x, indices, api, tea_model)
+                 adv_x, indices,selected_data if ori_img is None else selected_ori_img, api, tea_model)
             # new_output = forward_fn(adv_x)
             # m = nn.Softmax(dim=1)
 
@@ -806,6 +806,86 @@ def distillation(module: nn.Module, pgd_set, num_classes: int,
             else:
                 return loss, adv_x, _adv_soft_label, _adv_hapi_label
 
+
+            
+    if adv_valid is not None:
+
+        def filter_succ(adv_x,S_ori_label,T_ori_label):
+            #output label of adv_x
+            S_adv_x_label = torch.argmax(forward_fn(adv_x), dim=-1)
+            #succ tensor
+            S_succ_tensor = ~torch.eq(S_adv_x_label,S_ori_label)
+            #find the succ adv sample locally
+            S_succ_adv_x = adv_x[S_succ_tensor]
+            S_succ_ori_label = S_ori_label[S_succ_tensor]
+            S_succ_adv_x_label = S_adv_x_label[S_succ_tensor]
+            T_succ_ori_label = T_ori_label[S_succ_tensor]
+            #make the indice
+            indices = torch.arange(S_succ_adv_x.shape[0])
+
+
+
+            _, _, T_adv_x_label, new_indices = get_api(
+                    S_succ_adv_x, indices, api=api)
+            T_adv_x_label = T_adv_x_label.cuda()
+            S_succ_ori_label = S_succ_ori_label[new_indices]
+            S_succ_adv_x_label = S_succ_adv_x_label[new_indices]
+            T_succ_ori_label = T_succ_ori_label[new_indices]
+            #x在api的返回（该x对应的advx在本地已经攻击成功，T_adv_x_label advx在api的返回），证明同时改变了分类边缘
+            adv_fidelity = (~torch.eq(T_succ_ori_label,T_adv_x_label)).sum().item()/T_adv_x_label.shape[0]*100.0
+            
+            #advx在本地的结果，advx在api的结果，证明同时改变了分类边缘且边缘绝对一致
+            adv_fidelity_hard = (torch.eq(S_succ_adv_x_label,T_adv_x_label)).sum().item()/T_adv_x_label.shape[0]*100.0
+            return adv_fidelity, adv_fidelity_hard
+    
+        if adv_valid == 'pgd':
+            from trojanzoo.optim import PGD
+            pgd = PGD(pgd_alpha=2 / 255, pgd_eps=4 / 255, iteration=7, random_init=True)
+
+        elif adv_valid == 'cw':
+            cw = CW(module, c=1, kappa=0, steps=50, lr=0.01)
+        else:
+            raise NotImplementedError(f'{adv_valid=} is not supported yet.')
+
+        def adv_fidelity_fn(_input: torch.Tensor, 
+                          _soft_label: torch.Tensor = None, _output: torch.Tensor = None):
+
+
+            if adv_valid == 'pgd':
+
+                model_label = torch.argmax(_output, dim=-1)
+                hapi_label = torch.argmax(_soft_label, dim=-1)
+
+                def pgd_loss_fn(_input: torch.Tensor,target:torch.Tensor,**kwargs):
+                    return -F.cross_entropy(forward_fn(_input), target)
+
+                @torch.no_grad()
+                def early_stop_check(current_idx: torch.Tensor,
+                                     adv_input: torch.Tensor, target: torch.Tensor, *args,
+                                     stop_threshold: float = None, require_class: bool = None,
+                                     **kwargs) -> torch.Tensor:
+
+                    _class = torch.argmax(forward_fn(adv_input[current_idx]), dim=-1)
+                    class_result = _class == target[current_idx]
+                    class_result = ~class_result
+                    result = class_result
+                    return result.detach().cpu()
+                pgd.early_stop_check = early_stop_check
+
+                adv_x, succ_tensor = pgd.optimize(_input=_input, loss_fn=pgd_loss_fn,target=model_label,loss_kwargs={'target':model_label})
+            
+                succ_tensor = succ_tensor.eq(-1)
+
+
+            elif adv_valid == 'cw':
+                adv_x = cw(selected_data, torch.argmax(selected_output, dim=-1))
+               
+            else:
+                raise NotImplementedError(f'{adv_train=} is not supported yet.')
+
+            return filter_succ(adv_x,model_label,hapi_label)
+        
+        
     writer = SummaryWriter(log_dir=log_dir)
     validate_fn = dis_validate
 
@@ -1275,16 +1355,30 @@ def distillation(module: nn.Module, pgd_set, num_classes: int,
                                    tag_scalar_dict={tag: ahapi_succ}, global_step=_epoch + start_epoch)
 
         if validate_interval != 0 and (_epoch % validate_interval == 0 or _epoch == epochs):
-            validate_result = validate_fn(module=module,
-                                          num_classes=num_classes,
-                                          loader=loader_valid,
-                                          writer=writer, tag=tag,
-                                          _epoch=_epoch + start_epoch,
-                                          verbose=verbose, indent=indent,
-                                          label_train=label_train,
-                                          hapi_label_train=hapi_label_train, encoder_train=encoder_train,
-                                          api=api, task=task, after_loss_fn=after_loss_fn, adv_valid=adv_valid, tea_model=tea_model,
-                                          **kwargs)
+            if _epoch == epochs:
+                validate_result = validate_fn(module=module,
+                                            num_classes=num_classes,
+                                            loader=loader_valid,
+                                            writer=writer, tag=tag,
+                                            _epoch=_epoch + start_epoch,
+                                            verbose=verbose, indent=indent,
+                                            label_train=label_train,
+                                            hapi_label_train=hapi_label_train, encoder_train=encoder_train,
+                                            api=api, task=task, after_loss_fn=after_loss_fn, adv_valid=adv_valid, 
+                                            adv_fidelity_fn=adv_fidelity_fn,tea_model=tea_model,
+                                            **kwargs)
+            else:
+                validate_result = validate_fn(module=module,
+                            num_classes=num_classes,
+                            loader=loader_valid,
+                            writer=writer, tag=tag,
+                            _epoch=_epoch + start_epoch,
+                            verbose=verbose, indent=indent,
+                            label_train=label_train,
+                            hapi_label_train=hapi_label_train, encoder_train=encoder_train,
+                            api=api, task=task, after_loss_fn=after_loss_fn, adv_valid=None, 
+                            adv_fidelity_fn=None,tea_model=tea_model,
+                            **kwargs)
             if encoder_train:
                 cur_loss = validate_result
                 if cur_loss >= best_loss:
@@ -1328,7 +1422,7 @@ def dis_validate(module: nn.Module, num_classes: int,
                  writer=None, main_tag: str = 'valid',
                  tag: str = '', _epoch: int = None,
                  label_train=False, hapi_label_train=False, api=False, task=None, after_loss_fn=None, adv_valid=False, tea_model=None,
-                 encoder_train=False,
+                 encoder_train=False,adv_fidelity_fn=None,
                  **kwargs) -> tuple[float, float]:
     r"""Evaluate the model.
 
@@ -1349,10 +1443,10 @@ def dis_validate(module: nn.Module, num_classes: int,
     #     #                     tt=None,tf=None,ft=None,ff=None)
     #     logger.create_meters( gt_loss=None, gt_acc1=None,
     #                         hapi_loss=None, hapi_acc1=None)
-    if adv_valid:
+    if adv_valid is not None:
         logger.create_meters(gt_loss=None, gt_acc1=None,
                              hapi_loss=None, hapi_acc1=None,
-                             adv_loss=None, adv_acc1=None)
+                             adv_fidelity=None, adv_fidelity_hard=None)
     else:
         logger.create_meters(gt_loss=None, gt_acc1=None,
                              hapi_loss=None, hapi_acc1=None)
@@ -1366,7 +1460,7 @@ def dis_validate(module: nn.Module, num_classes: int,
                                         indent=indent)
     encoder_num = 0
     for data in loader_epoch:
-        if adv_valid:
+        if adv_valid is not None:
             match task:
                 case 'emotion':
 
@@ -1381,13 +1475,8 @@ def dis_validate(module: nn.Module, num_classes: int,
                     _label = _label.cuda()
                     hapi_label = hapi_label.cuda()
                     _output = forward_fn(_input)
-                    if adv_valid:
-                        loss, adv_x, adv_api_soft_label, adv_api_hapi_label = after_loss_fn(
-                            _input=_input, _label=_label, _output=_output, mode='valid')
-                        adv_x = adv_x.cuda()
-                        adv_api_soft_label = adv_api_soft_label.cuda()
-                        adv_output = forward_fn(adv_x)
-                        adv_loss = float(loss_fn(_soft_label=adv_api_soft_label, _output=adv_output, **kwargs))
+                    if adv_valid is not None:
+                        adv_fidelity,adv_fidelity_hard = adv_fidelity_fn(_input,_soft_label,_output)
 
                 case 'sentiment':
                     if module.model_name == 'xlnet':
@@ -1406,17 +1495,8 @@ def dis_validate(module: nn.Module, num_classes: int,
                     elif module.model_name == 'roberta' or  module.model_name == 't5':
                         _output = forward_fn(input_ids=input_ids, attention_mask=attention_mask)
 
-                    # # input_ids, token_type_ids, attention_mask, _label, _soft_label, hapi_label  = data
-                    # input_ids, attention_mask, _label, _soft_label, hapi_label  = data
-                    # input_ids = input_ids.cuda()
-                    # # token_type_ids = token_type_ids.cuda()
-                    # attention_mask = attention_mask.cuda()
-                    # _label = _label.cuda()
-                    # _soft_label = _soft_label.cuda()
-                    # hapi_label = hapi_label.cuda()
-
-                    # _output = forward_fn(input_ids=input_ids,attention_mask=attention_mask)
-                    if adv_valid:
+                   
+                    if adv_valid is not None:
                         raise NotImplementedError(f'{adv_valid=} is not supported on sentiment yet.')
 
             gt_loss = float(loss_fn(_label=_label, _output=_output, **kwargs))
@@ -1439,13 +1519,11 @@ def dis_validate(module: nn.Module, num_classes: int,
                     new_num_classes = num_classes
             gt_acc1, gt_acc5 = accuracy_fn(
                 _output, _label, num_classes=new_num_classes, topk=(1, 5))
-            if adv_valid:
-                adv_acc1, adv_acc5 = accuracy_fn(
-                    adv_output, adv_api_hapi_label, num_classes=new_num_classes, topk=(1, 5))
+            if adv_valid is not None:
 
                 logger.update(n=batch_size, gt_loss=float(gt_loss), gt_acc1=gt_acc1,
                               hapi_loss=float(hapi_loss), hapi_acc1=hapi_acc1,
-                              adv_loss=adv_loss, adv_acc1=adv_acc1)
+                              adv_fidelity=adv_fidelity, adv_fidelity_hard=adv_fidelity_hard)
             else:
                 logger.update(n=batch_size, gt_loss=float(gt_loss), gt_acc1=gt_acc1,
                               hapi_loss=float(hapi_loss), hapi_acc1=hapi_acc1)
@@ -1486,7 +1564,7 @@ def dis_validate(module: nn.Module, num_classes: int,
                                                  attention_mask=attention_mask)
                         elif module.model_name == 'roberta' or  module.model_name == 't5':
                             _output = forward_fn(input_ids=input_ids, attention_mask=attention_mask)
-                        if adv_valid:
+                        if adv_valid is not None:
                             raise NotImplementedError(f'{adv_valid=} is not supported on sentiment yet.')
                     case 'cifar10':
                         _input, _label = data
@@ -1539,13 +1617,11 @@ def dis_validate(module: nn.Module, num_classes: int,
                         new_num_classes = num_classes
                 gt_acc1, gt_acc5 = accuracy_fn(
                     _output, _label, num_classes=new_num_classes, topk=(1, 5))
-                if adv_valid:
-                    adv_acc1, adv_acc5 = accuracy_fn(
-                        adv_output, adv_api_hapi_label, num_classes=new_num_classes, topk=(1, 5))
+                if adv_valid is not None:
 
                     logger.update(n=batch_size, gt_loss=float(gt_loss), gt_acc1=gt_acc1,
                                   hapi_loss=float(hapi_loss), hapi_acc1=hapi_acc1,
-                                  adv_loss=adv_loss, adv_acc1=adv_acc1)
+                                  adv_fidelity=adv_fidelity, adv_fidelity_hard=adv_fidelity_hard)
                 else:
                     logger.update(n=batch_size, gt_loss=float(gt_loss), gt_acc1=gt_acc1,
                                   hapi_loss=float(hapi_loss), hapi_acc1=hapi_acc1)
@@ -1558,14 +1634,28 @@ def dis_validate(module: nn.Module, num_classes: int,
             writer.add_scalars(main_tag='loss/' + main_tag,
                                tag_scalar_dict={tag: loss}, global_step=_epoch)
         return loss
+    if adv_valid is not None:
 
-    gt_loss, gt_acc1, hapi_loss, hapi_acc1 = (logger.meters['gt_loss'].global_avg,
-                                              logger.meters['gt_acc1'].global_avg,
-                                              logger.meters['hapi_loss'].global_avg,
-                                              logger.meters['hapi_acc1'].global_avg)
+        gt_loss, gt_acc1, hapi_loss, hapi_acc1,adv_fidelity,adv_fidelity_hard = (logger.meters['gt_loss'].global_avg,
+                                                logger.meters['gt_acc1'].global_avg,
+                                                logger.meters['hapi_loss'].global_avg,
+                                                logger.meters['hapi_acc1'].global_avg,
+                                                logger.meters['adv_fidelity'].global_avg,
+                                                logger.meters['adv_fidelity_hard'].global_avg)
+        print("adv_fidelity: ",adv_fidelity," adv_fidelity_hard: ",adv_fidelity_hard)
+    else:
+        gt_loss, gt_acc1, hapi_loss, hapi_acc1 = (logger.meters['gt_loss'].global_avg,
+                                                logger.meters['gt_acc1'].global_avg,
+                                                logger.meters['hapi_loss'].global_avg,
+                                                logger.meters['hapi_acc1'].global_avg)
     if writer is not None and _epoch is not None and main_tag:
         from torch.utils.tensorboard import SummaryWriter
         assert isinstance(writer, SummaryWriter)
+        if adv_valid is not None:
+            writer.add_scalars(main_tag='adv_fidelity/' + main_tag,
+                            tag_scalar_dict={tag: adv_fidelity}, global_step=_epoch)
+            writer.add_scalars(main_tag='adv_fidelity_hard/' + main_tag,
+                            tag_scalar_dict={tag: adv_fidelity_hard}, global_step=_epoch)
         writer.add_scalars(main_tag='gt_loss/' + main_tag,
                            tag_scalar_dict={tag: gt_loss}, global_step=_epoch)
         writer.add_scalars(main_tag='gt_acc1/' + main_tag,
@@ -1575,35 +1665,6 @@ def dis_validate(module: nn.Module, num_classes: int,
         writer.add_scalars(main_tag='hapi_acc1/' + main_tag,
                            tag_scalar_dict={tag: hapi_acc1}, global_step=_epoch)
 
-    # else:
-    #     gt_loss, gt_acc1, hapi_loss, hapi_acc1,tt,tf,ft,ff = (logger.meters['gt_loss'].global_avg,
-    #                 logger.meters['gt_acc1'].global_avg,
-    #                 logger.meters['hapi_loss'].global_avg,
-    #                 logger.meters['hapi_acc1'].global_avg,
-    #                 logger.meters['tt'].global_avg,
-    #                 logger.meters['tf'].global_avg,
-    #                 logger.meters['ft'].global_avg,
-    #                 logger.meters['ff'].global_avg)
-
-    #     if writer is not None and _epoch is not None and main_tag:
-    #         from torch.utils.tensorboard import SummaryWriter
-    #         assert isinstance(writer, SummaryWriter)
-    #         writer.add_scalars(main_tag='gt_loss/' + main_tag,
-    #                     tag_scalar_dict={tag: gt_loss}, global_step=_epoch)
-    #         writer.add_scalars(main_tag='gt_acc1/' + main_tag,
-    #                     tag_scalar_dict={tag: gt_acc1}, global_step=_epoch)
-    #         writer.add_scalars(main_tag='hapi_loss/' + main_tag,
-    #                     tag_scalar_dict={tag: hapi_loss}, global_step=_epoch)
-    #         writer.add_scalars(main_tag='hapi_acc1/' + main_tag,
-    #                     tag_scalar_dict={tag: hapi_acc1}, global_step=_epoch)
-    #         writer.add_scalars(main_tag='tt/' + main_tag,
-    #                         tag_scalar_dict={tag: tt}, global_step=_epoch)
-    #         writer.add_scalars(main_tag='tf/' + main_tag,
-    #                         tag_scalar_dict={tag: tf}, global_step=_epoch)
-    #         writer.add_scalars(main_tag='ft/' + main_tag,
-    #                         tag_scalar_dict={tag: ft}, global_step=_epoch)
-    #         writer.add_scalars(main_tag='ff/' + main_tag,
-    #                         tag_scalar_dict={tag: ff}, global_step=_epoch)
-
+   
     return hapi_acc1, hapi_loss, gt_acc1
 

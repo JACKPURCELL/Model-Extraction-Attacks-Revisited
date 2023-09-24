@@ -380,7 +380,7 @@ from torchvision.utils import save_image
 
 
 
-def get_api(_input, x, indices, api='amazon', tea_model=None):
+def get_api(x, indices, _input=None,api='amazon', tea_model=None):
     adv_x_num = 700
 
     # define a transform to convert a tensor to PIL image
@@ -405,9 +405,9 @@ def get_api(_input, x, indices, api='amazon', tea_model=None):
         # img:Image = transform(x[i,:,:,:])
         # img_input:Image = transform(_input[i,:,:,:])
         path = os.path.join('/data/jc/data/image/adv_x', str(adv_x_num) + '.png')
-        path_input = os.path.join('/data/jc/data/image/adv_x', str(adv_x_num) + '_input.png')
+        # path_input = os.path.join('/data/jc/data/image/adv_x', str(adv_x_num) + '_input.png')
         save_image(x[i, :, :, :], path, 'png')
-        save_image(_input[i, :, :, :], path_input, 'png')
+        # save_image(_input[i, :, :, :], path_input, 'png')
         # path_b = os.path.join('/data/jc/data/image/adv_x', str(adv_x_num)+'b'+'.png')
         # path_input_b = os.path.join('/data/jc/data/image/adv_x', str(adv_x_num)+'b'+'_input.png')
         # save_image_b(x[i,:,:,:],path_b)
@@ -574,7 +574,7 @@ def distillation(module: nn.Module, pgd_set, num_classes: int,
                 adv_x = cw(_input, model_label)
                 
             adv_x, _adv_soft_label, _adv_hapi_label, new_indices = get_api(
-                _input, adv_x, np.arange(adv_x.shape[0]), api)
+                 adv_x, np.arange(adv_x.shape[0]), _input,api)
 
             adv_model_output = torch.argmax(forward_fn(adv_x) , dim=-1)
             
