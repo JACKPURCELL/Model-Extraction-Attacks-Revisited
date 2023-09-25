@@ -36,7 +36,20 @@
 
         },
 
+        {
+            "name": "cifar10gt.py",
+            "type": "python",
+            "request": "launch",
+            "program": "main.py",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "env":{
+                "CUDA_VISIBLE_DEVICES":"2"
+            },
+            "args":["--epochs","1","--log_dir","test","--lr_scheduler","--batch_size","64","--model","resnet101","--grad_clip","3.0","--lr","3e-4","--op_parameters","full","--validate_interval","1","--num_classes","10","--dataset","cifar10","--hapi_info","fer/rafdb/microsoft_fer/22-05-23","--label_train"]
 
+
+        },
         {
             "name": "main.py",
             "type": "python",

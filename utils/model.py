@@ -1332,6 +1332,8 @@ def distillation(module: nn.Module, pgd_set, num_classes: int,
             if writer is not None:
                 writer.add_scalars(main_tag='loss/' + main_tag,
                                    tag_scalar_dict={tag: loss}, global_step=_epoch + start_epoch)
+                with open(os.path.join(log_dir, "train.csv"), "a") as f:
+                    f.write("%d,%f\n"%(_epoch + start_epoch, loss ))
         else:
             gt_acc1, hapi_loss, hapi_acc1 = (
                 logger.meters['gt_acc1'].global_avg,
@@ -1344,6 +1346,9 @@ def distillation(module: nn.Module, pgd_set, num_classes: int,
                                    tag_scalar_dict={tag: hapi_loss}, global_step=_epoch + start_epoch)
                 writer.add_scalars(main_tag='hapi_acc1/' + main_tag,
                                    tag_scalar_dict={tag: hapi_acc1}, global_step=_epoch + start_epoch)
+                with open(os.path.join(log_dir, "train.csv"), "a") as f:
+                    f.write("%d,%f,%f,%f\n"%(_epoch + start_epoch, gt_acc1,hapi_loss,hapi_acc1 ))
+                
 
         if adv_train:
             attack_succ = logger.meters['attack_succ'].global_avg
@@ -1365,7 +1370,7 @@ def distillation(module: nn.Module, pgd_set, num_classes: int,
                                             label_train=label_train,
                                             hapi_label_train=hapi_label_train, encoder_train=encoder_train,
                                             api=api, task=task, after_loss_fn=after_loss_fn, adv_valid=adv_valid, 
-                                            adv_fidelity_fn=adv_fidelity_fn,tea_model=tea_model,
+                                            adv_fidelity_fn=adv_fidelity_fn,tea_model=tea_model,log_dir=log_dir,
                                             **kwargs)
             else:
                 validate_result = validate_fn(module=module,
@@ -1377,7 +1382,7 @@ def distillation(module: nn.Module, pgd_set, num_classes: int,
                             label_train=label_train,
                             hapi_label_train=hapi_label_train, encoder_train=encoder_train,
                             api=api, task=task, after_loss_fn=after_loss_fn, adv_valid=None, 
-                            adv_fidelity_fn=None,tea_model=tea_model,
+                            adv_fidelity_fn=None,tea_model=tea_model,log_dir=log_dir,
                             **kwargs)
             if encoder_train:
                 cur_loss = validate_result
@@ -1422,7 +1427,7 @@ def dis_validate(module: nn.Module, num_classes: int,
                  writer=None, main_tag: str = 'valid',
                  tag: str = '', _epoch: int = None,
                  label_train=False, hapi_label_train=False, api=False, task=None, after_loss_fn=None, adv_valid=False, tea_model=None,
-                 encoder_train=False,adv_fidelity_fn=None,
+                 encoder_train=False,adv_fidelity_fn=None,log_dir=None,
                  **kwargs) -> tuple[float, float]:
     r"""Evaluate the model.
 
@@ -1656,6 +1661,11 @@ def dis_validate(module: nn.Module, num_classes: int,
                             tag_scalar_dict={tag: adv_fidelity}, global_step=_epoch)
             writer.add_scalars(main_tag='adv_fidelity_hard/' + main_tag,
                             tag_scalar_dict={tag: adv_fidelity_hard}, global_step=_epoch)
+            with open(os.path.join(log_dir, "valid.csv"), "a") as f:
+                    f.write("%d,%f,%f,%f,%f,%f,%f\n"%(_epoch, gt_loss,gt_acc1,hapi_loss,hapi_acc1,adv_fidelity,adv_fidelity_hard ))
+        else:
+            with open(os.path.join(log_dir, "valid.csv"), "a") as f:
+                    f.write("%d,%f,%f,%f,%f\n"%(_epoch, gt_loss,gt_acc1,hapi_loss,hapi_acc1 ))
         writer.add_scalars(main_tag='gt_loss/' + main_tag,
                            tag_scalar_dict={tag: gt_loss}, global_step=_epoch)
         writer.add_scalars(main_tag='gt_acc1/' + main_tag,
@@ -1665,6 +1675,6 @@ def dis_validate(module: nn.Module, num_classes: int,
         writer.add_scalars(main_tag='hapi_acc1/' + main_tag,
                            tag_scalar_dict={tag: hapi_acc1}, global_step=_epoch)
 
-   
+    
     return hapi_acc1, hapi_loss, gt_acc1
 
