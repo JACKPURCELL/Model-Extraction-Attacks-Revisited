@@ -603,7 +603,7 @@ def distillation(module: nn.Module, pgd_set, num_classes: int,
                     S_succ_adv_x, indices, api=api)
             length = T_adv_x_label.shape[0]
             if length == 0:
-                exit(0)
+                return -1,-1
             T_adv_x_label = T_adv_x_label.cuda()
             S_succ_ori_label = S_succ_ori_label[new_indices]
             S_succ_adv_x_label = S_succ_adv_x_label[new_indices]
@@ -1020,7 +1020,7 @@ def dis_validate(module: nn.Module, num_classes: int,
                 _output, hapi_label, num_classes=new_num_classes, topk=(1, 5))
             gt_acc1, gt_acc5 = accuracy_fn(
                 _output, _label, num_classes=new_num_classes, topk=(1, 5))
-            if adv_valid is not None:
+            if adv_valid is not None and adv_fidelity!=-1:
                 logger.update(n=batch_size, gt_loss=float(gt_loss), gt_acc1=gt_acc1,
                               hapi_loss=float(hapi_loss), hapi_acc1=hapi_acc1,
                               adv_fidelity=adv_fidelity, adv_fidelity_hard=adv_fidelity_hard)
@@ -1115,12 +1115,7 @@ def dis_validate(module: nn.Module, num_classes: int,
                     _output, hapi_label, num_classes=new_num_classes, topk=(1, 5))
                 gt_acc1, gt_acc5 = accuracy_fn(
                     _output, _label, num_classes=new_num_classes, topk=(1, 5))
-                if adv_valid is not None:
-                    logger.update(n=batch_size, gt_loss=gt_loss, gt_acc1=gt_acc1,
-                                  hapi_loss=hapi_loss, hapi_acc1=hapi_acc1,
-                                  adv_fidelity=adv_fidelity, adv_fidelity_hard=adv_fidelity_hard)
-                else:
-                    logger.update(n=batch_size, gt_loss=float(gt_loss), gt_acc1=gt_acc1,
+                logger.update(n=batch_size, gt_loss=float(gt_loss), gt_acc1=gt_acc1,
                                   hapi_loss=float(hapi_loss), hapi_acc1=hapi_acc1)
          
     if encoder_train:
