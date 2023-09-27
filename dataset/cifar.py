@@ -95,10 +95,16 @@ class CIFAR10(datasets.CIFAR10):
 #                              transform: Optional[Callable] = None, target_transform: Optional[Callable] = None, download: bool = False)
     def __init__(self, mode, transform='Normal',**kwargs):
         if transform == 'Normal':
-            transform = get_transform_cifar(
-                    mode, auto_augment=True,
-                    cutout=False, cutout_length=None,
-                    data_shape=self.data_shape,norm_par=None)
+            transform = transforms.Compose([
+            transforms.RandomCrop(32, padding=4),
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor()
+           
+        ])
+            # get_transform_cifar(
+            #         mode, auto_augment=True,
+            #         cutout=False, cutout_length=None,
+            #         data_shape=self.data_shape,norm_par=None)
         elif transform == 'raw':
             transform = transforms.Compose([transforms.PILToTensor(),
                                    transforms.ConvertImageDtype(torch.float)])

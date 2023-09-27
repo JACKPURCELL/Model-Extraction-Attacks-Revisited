@@ -15,7 +15,7 @@ from collections.abc import Iterable
 from adversirial.pgd import PGD
 from optimizer.lion import Lion
 from torchvision import transforms
-
+from .resnet_cifar10 import *
         
 class ResNet(nn.Module):
 
@@ -30,6 +30,11 @@ class ResNet(nn.Module):
         elif model_name == 'resnet50_raw':
             ModelClass = getattr(torchvision.models, 'resnet50')
             _model = ModelClass().cuda()
+        elif 'cifar10' in model_name:
+            ModelClass = getattr(torchvision.models, model_name.split('_')[0])
+            _model = ModelClass().cuda()
+            _model.conv1 = nn.Conv2d(3, 64, kernel_size=3,
+                               stride=1, padding=1, bias=False).cuda()
         else:
             ModelClass = getattr(torchvision.models, model_name)
             _model = ModelClass(weights='DEFAULT').cuda()
@@ -57,6 +62,8 @@ class ResNet(nn.Module):
                          ])
         self.classifier = nn.Sequential(OrderedDict(module_list)).cuda()
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1)).cuda()
+        self.embedding_recorder = EmbeddingRecorder(record_embedding).cuda()
+        
         if path is not None:
             self.load_state_dict(path)
 
@@ -129,6 +136,7 @@ class ResNet(nn.Module):
         x = self.features(x)
         x = self.avgpool(x)
         x = torch.flatten(x, 1)
+        x = self.embedding_recorder(x)
         x = self.classifier(x)
         return x
 

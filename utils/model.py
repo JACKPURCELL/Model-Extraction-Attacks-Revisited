@@ -807,7 +807,7 @@ def distillation(module: nn.Module, pgd_set, num_classes: int,
                 return loss, adv_x, _adv_soft_label, _adv_hapi_label
 
 
-            
+    adv_fidelity_fn = None        
     if adv_valid is not None:
 
         def filter_succ(adv_x,S_ori_label,T_ori_label):
@@ -827,15 +827,18 @@ def distillation(module: nn.Module, pgd_set, num_classes: int,
 
             _, _, T_adv_x_label, new_indices = get_api(
                     S_succ_adv_x, indices, api=api)
+            length = T_adv_x_label.shape[0]
+            if length == 0:
+                exit(0)
             T_adv_x_label = T_adv_x_label.cuda()
             S_succ_ori_label = S_succ_ori_label[new_indices]
             S_succ_adv_x_label = S_succ_adv_x_label[new_indices]
             T_succ_ori_label = T_succ_ori_label[new_indices]
             #x在api的返回（该x对应的advx在本地已经攻击成功，T_adv_x_label advx在api的返回），证明同时改变了分类边缘
-            adv_fidelity = (~torch.eq(T_succ_ori_label,T_adv_x_label)).sum().item()/T_adv_x_label.shape[0]*100.0
+            adv_fidelity = 100.0*(~torch.eq(T_succ_ori_label,T_adv_x_label)).sum().item()/length
             
             #advx在本地的结果，advx在api的结果，证明同时改变了分类边缘且边缘绝对一致
-            adv_fidelity_hard = (torch.eq(S_succ_adv_x_label,T_adv_x_label)).sum().item()/T_adv_x_label.shape[0]*100.0
+            adv_fidelity_hard =100.0* (torch.eq(S_succ_adv_x_label,T_adv_x_label)).sum().item()/length
             return adv_fidelity, adv_fidelity_hard
     
         if adv_valid == 'pgd':
@@ -1624,12 +1627,12 @@ def dis_validate(module: nn.Module, num_classes: int,
                     _output, _label, num_classes=new_num_classes, topk=(1, 5))
                 if adv_valid is not None:
 
-                    logger.update(n=batch_size, gt_loss=float(gt_loss), gt_acc1=gt_acc1,
-                                  hapi_loss=float(hapi_loss), hapi_acc1=hapi_acc1,
+                    logger.update(n=batch_size, gt_loss=gt_loss, gt_acc1=gt_acc1,
+                                  hapi_loss=hapi_loss, hapi_acc1=hapi_acc1,
                                   adv_fidelity=adv_fidelity, adv_fidelity_hard=adv_fidelity_hard)
                 else:
-                    logger.update(n=batch_size, gt_loss=float(gt_loss), gt_acc1=gt_acc1,
-                                  hapi_loss=float(hapi_loss), hapi_acc1=hapi_acc1)
+                    logger.update(n=batch_size, gt_loss=gt_loss, gt_acc1=gt_acc1,
+                                  hapi_loss=hapi_loss, hapi_acc1=hapi_acc1)
             
     if encoder_train:
         loss = (logger.meters['loss'].global_avg)
