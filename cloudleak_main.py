@@ -23,7 +23,7 @@ from dataset.imdb import IMDB
 from dataset.rafdb import RAFDB
 from dataset.kdef import KDEF
 from dataset.cifar import CIFAR10
-from utils.cloudleak import distillation,train
+from utils.cloudleak import distillation
 from torch.utils.data import Dataset,Subset
 
 

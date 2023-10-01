@@ -381,7 +381,7 @@ from torchvision.utils import save_image
 
 
 def get_api(x, indices, _input=None,api='amazon', tea_model=None):
-    adv_x_num = 700
+    adv_x_num = 200
 
     # define a transform to convert a tensor to PIL image
     transform = T.ToPILImage(mode='RGB')
@@ -938,7 +938,8 @@ def dis_validate(module: nn.Module, num_classes: int,
     if adv_valid:
         logger.create_meters(gt_loss=None, gt_acc1=None,
                              hapi_loss=None, hapi_acc1=None,
-                             adv_loss=None, adv_acc1=None)
+                             adv_fidelity=None,adv_fidelity_hard=None
+                             )
     else:
         logger.create_meters(gt_loss=None, gt_acc1=None,
                              hapi_loss=None, hapi_acc1=None)
