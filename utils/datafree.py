@@ -259,7 +259,7 @@ from torchvision.utils import save_image
 
 
 def get_api( x,  api='amazon', tea_model=None):
-    adv_x_num = 500
+    adv_x_num = 200
 
  
     # convert the tensor to PIL image using above transform
