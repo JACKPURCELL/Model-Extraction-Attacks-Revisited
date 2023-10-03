@@ -351,7 +351,7 @@ elif args.mixmatch or args.fixmatch:#mixmatch
         _unlabel_dataset = Subset(RAFDB(input_directory=os.path.join('/data/jc/data/image/RAFDB',"train"),hapi_data_dir=args.hapi_data_dir,hapi_info=args.hapi_info,api=args.api,transform = transform_type),
                                 _unlabel_dataset_indices)
     elif args.dataset == 'ferplus':
-        _unlabel_dataset = Subset(RAFDB(input_directory=os.path.join('/data/jc/data/image/ferplus_hapi',"train"),hapi_data_dir=args.hapi_data_dir,hapi_info=args.hapi_info,api=args.api,transform = transform_type),
+        _unlabel_dataset = Subset(FERPLUS(input_directory=os.path.join('/data/jc/data/image/ferplus_hapi',"train"),hapi_data_dir=args.hapi_data_dir,hapi_info=args.hapi_info,api=args.api,transform = transform_type),
                                 _unlabel_dataset_indices)
     elif args.dataset == 'kdef':
         _unlabel_dataset = Subset(KDEF(input_directory=os.path.join('/data/jc/data/image/KDEF_and_AKDEF/KDEF_spilit',"train"),hapi_data_dir=args.hapi_data_dir,hapi_info=args.hapi_info,api=args.api,transform = transform_type),
