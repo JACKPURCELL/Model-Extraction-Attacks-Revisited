@@ -1420,6 +1420,8 @@ def distillation(module: nn.Module, pgd_set, num_classes: int,
                 prints('-' * 50, indent=indent)
     module.zero_grad()
     print('best_validate_result', best_validate_result)
+    with open(os.path.join(log_dir, "valid.csv"), "a") as f:
+                    f.write("%d,%f,%f\n"%(99999, best_validate_result[0],best_validate_result[2] ))
     return best_validate_result
 
 
