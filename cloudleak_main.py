@@ -171,7 +171,7 @@ if args.log_dir is None:
     if args.lr_scheduler:
         log_dir += "_lrsche"
 else:
-    log_dir = 'submit2/'+args.log_dir
+    log_dir = 'submit3/'+args.log_dir
     
 if 'resnet' in args.model:
     model = getattr(models,'resnet')(norm_par=train_dataset.norm_par,model_name=args.model,num_classes=args.num_classes)
