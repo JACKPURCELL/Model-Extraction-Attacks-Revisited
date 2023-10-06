@@ -29,9 +29,9 @@
             "console": "integratedTerminal",
             "justMyCode": false,
             "env":{
-                "CUDA_VISIBLE_DEVICES":"3"
+                "CUDA_VISIBLE_DEVICES":"2"
             },
-            "args":["--adv_valid","pgd","--epochs","1","--log_dir","test","--lr_scheduler","--batch_size","64","--model","resnet50","--grad_clip","3.0","--lr","3e-4","--op_parameters","full","--validate_interval","1","--num_classes","8","--dataset","rafdb","--hapi_info","fer/rafdb/microsoft_fer/22-05-23","--api","amazon"]
+            "args":["--label_batch","2","--save","--adv_valid","pgd","--epochs","1","--log_dir","test","--lr_scheduler","--batch_size","64","--model","resnet50","--grad_clip","3.0","--lr","3e-4","--op_parameters","full","--validate_interval","1","--num_classes","8","--dataset","rafdb","--hapi_info","fer/rafdb/microsoft_fer/22-05-23","--api","amazon"]
 
 
         },

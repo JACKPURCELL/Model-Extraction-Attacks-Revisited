@@ -435,7 +435,7 @@ from torchvision.utils import save_image
 
 
 def get_api(x, indices, _input=None,api='amazon', tea_model=None):
-    adv_x_num = 500
+    adv_x_num = 800
 
     # define a transform to convert a tensor to PIL image
     transform = T.ToPILImage(mode='RGB')
@@ -1410,7 +1410,9 @@ def distillation(module: nn.Module, pgd_set, num_classes: int,
     with open(os.path.join(log_dir, "valid.csv"), "a") as f:
                     f.write("%d,%f,%f\n"%(99999, best_validate_result[0],best_validate_result[2] ))
     if adv_valid:                
-        module.load_state_dict(torch.load(log_dir+'model.pth'))  
+        
+        print(os.path.join(log_dir, f'model.pth'))
+        module.load_state_dict(os.path.join(log_dir, f'model.pth'))  
                                     
         validate_result = validate_fn(module=module,
                                 num_classes=num_classes,
