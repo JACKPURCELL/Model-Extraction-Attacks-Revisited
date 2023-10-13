@@ -25,18 +25,30 @@ def gettensor(dic):
             hapi_mode = predictions[dic][i]['example_id'].split('_')[0]
             hapi_id = int(predictions[dic][i]['example_id'].split('_')[1])
             if hapi_mode == mode:
-                info_lb[mode][hapi_id] = torch.tensor((predictions[dic][i]['confidence']))
+                info_lb[mode][hapi_id] = torch.tensor((predictions[dic][i]['predicted_label']))
     return info_lb
 
     
 if __name__ == '__main__':
-    dic1 = gettensor('fer/rafdb/microsoft_fer/20-03-05')
-    dic2 = gettensor('fer/rafdb/microsoft_fer/21-02-16')
+    # dic1 = gettensor('fer/rafdb/microsoft_fer/20-03-05')
+    dic1 = gettensor('fer/rafdb/microsoft_fer/21-02-16')
+    lb_info_map={}
+    lb = hapi.get_labels(task='fer', dataset='rafdb')['fer/rafdb']
+    modes = ['train', 'test']
+    for mode in modes:
+        lb_info_map[mode] = torch.ones(100000)*(-1)
+        
+        for i in range(len(lb)):
+            hapi_mode = lb[i]['example_id'].split('_')[0]
+            hapi_id = int(lb[i]['example_id'].split('_')[1])
+            if hapi_mode == mode:
+                lb_info_map[mode][hapi_id] = torch.tensor((lb[i]['true_label']))
+        
     record = 0
     total = 0
-    modes = ['train']
+    modes = ['train', 'test']
     for mode in modes:
-        for label_1,label_2 in zip(dic1[mode],dic2[mode]):
+        for label_1,label_2 in zip(dic1[mode],lb_info_map[mode]):
             if label_1 != -1:
                 if label_1 == label_2:
                     record += 1
@@ -45,5 +57,44 @@ if __name__ == '__main__':
                     total += 1
                     
     print("record:",record,"total:",total,"percent",record/total)
+                    
+                    
+                    
+# def gettensor(dic):
+#     dic_split = dic.split('/')
+#     predictions =  hapi.get_predictions(task=dic_split[0], dataset=dic_split[1], date=dic_split[3], api=dic_split[2])
+#     info_lb={}
+#     # info_conf={}
+
+    
+#     modes = ['train', 'test']
+#     for mode in modes:
+#         info_lb[mode] = torch.ones(15000)*(-1)
+#         # info_conf[mode] = torch.zeros(20000)
+        
+#         for i in range(len(predictions[dic])):
+#             hapi_mode = predictions[dic][i]['example_id'].split('_')[0]
+#             hapi_id = int(predictions[dic][i]['example_id'].split('_')[1])
+#             if hapi_mode == mode:
+#                 info_lb[mode][hapi_id] = torch.tensor((predictions[dic][i]['confidence']))
+#     return info_lb
+
+    
+# if __name__ == '__main__':
+#     dic1 = gettensor('fer/rafdb/microsoft_fer/20-03-05')
+#     dic2 = gettensor('fer/rafdb/microsoft_fer/21-02-16')
+#     record = 0
+#     total = 0
+#     modes = ['train', 'test']
+#     for mode in modes:
+#         for label_1,label_2 in zip(dic1[mode],dic2[mode]):
+#             if label_1 != -1:
+#                 if label_1 == label_2:
+#                     record += 1
+#                     total += 1
+#                 else:
+#                     total += 1
+                    
+#     print("record:",record,"total:",total,"percent",record/total)
                     
                     

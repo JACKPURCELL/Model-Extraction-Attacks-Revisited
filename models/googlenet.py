@@ -20,7 +20,10 @@ class googlenet(nn.Module):
 
         super(googlenet, self).__init__() 
         ModelClass = getattr(torchvision.models, model_name)
-        self.model = ModelClass(weights='DEFAULT').cuda()
+        if 'raw' in model_name:
+            self.model = ModelClass().cuda()
+        else:    
+            self.model = ModelClass(weights='DEFAULT').cuda()
         if norm_par is not None:
             self.norm_par = norm_par
             self.transform = transforms.Normalize( mean=norm_par['mean'], std= norm_par['std'])       
