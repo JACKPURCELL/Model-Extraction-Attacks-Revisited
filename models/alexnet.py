@@ -19,10 +19,12 @@ class alexnet(nn.Module):
     def __init__(self, norm_par=None,model_name: str = 'alexnet',num_classes=7):
 
         super(alexnet, self).__init__() 
-        ModelClass = getattr(torchvision.models, model_name)
         if 'raw' in model_name:
+            ModelClass = getattr(torchvision.models, model_name.split('_raw')[0])
             self.model = ModelClass().cuda()
+            
         else:    
+            ModelClass = getattr(torchvision.models, model_name)
             self.model = ModelClass(weights='DEFAULT').cuda()
         if norm_par is not None:
             self.norm_par = norm_par
