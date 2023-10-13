@@ -19,9 +19,9 @@ class googlenet(nn.Module):
     def __init__(self, norm_par=None,model_name: str = 'googlenet',num_classes=7):
 
         super(googlenet, self).__init__() 
-        ModelClass = getattr(torchvision.models, model_name)
+        
         if 'raw' in model_name:
-            ModelClass = getattr(torchvision.models, model_name.split('_raw')[0])
+            ModelClass = getattr(torchvision.models, 'googlenet')
             self.model = ModelClass().cuda()
             
         else:    
@@ -37,7 +37,7 @@ class googlenet(nn.Module):
     def forward(self, x):
         if self.norm_par is None:
             return self.model(x)
-        return self.model(self.transform(x))
+        return self.model(self.transform(x)).logits
     
     def define_optimizer(
         self, parameters: str | Iterator[nn.Parameter] = 'full',

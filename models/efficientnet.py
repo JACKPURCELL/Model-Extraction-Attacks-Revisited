@@ -19,7 +19,7 @@ class efficientnet(nn.Module):
     def __init__(self, norm_par=None,model_name: str = 'efficientnet_v2_m',num_classes=7):
 
         super(efficientnet, self).__init__() 
-        ModelClass = getattr(torchvision.models, model_name)
+        
         if 'raw' in model_name:
             ModelClass = getattr(torchvision.models, model_name.split('_raw')[0])
             self.model = ModelClass().cuda()

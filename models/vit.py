@@ -28,7 +28,7 @@ from torchvision import transforms
 class ViT(nn.Module):
 
     def __init__(self, norm_par=None,model_name: str = 'vit_b_16',num_classes=7):
-        ModelClass = getattr(torchvision.models, model_name)
+        
 
         super(ViT, self).__init__() 
 

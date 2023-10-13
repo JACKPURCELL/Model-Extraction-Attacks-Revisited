@@ -19,7 +19,7 @@ class VGG(nn.Module):
     def __init__(self, norm_par=None,model_name: str = 'vgg19_bn',num_classes=7):
 
         super(VGG, self).__init__() 
-        ModelClass = getattr(torchvision.models, model_name)
+        
         if 'raw' in model_name:
             ModelClass = getattr(torchvision.models, model_name.split('_raw')[0])
             self.model = ModelClass().cuda()
