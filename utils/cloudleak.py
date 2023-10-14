@@ -381,7 +381,7 @@ from torchvision.utils import save_image
 
 
 def get_api(x, indices, _input=None,api='amazon', tea_model=None):
-    adv_x_num = 1000
+    adv_x_num = 900
 
     # define a transform to convert a tensor to PIL image
     transform = T.ToPILImage(mode='RGB')
@@ -864,22 +864,22 @@ def distillation(module: nn.Module, pgd_set, num_classes: int,
                     f.write("%d,%f,%f\n"%(_epoch + start_epoch ,hapi_loss,hapi_acc1 ))
 
         if validate_interval != 0 and (_epoch % validate_interval == 0 or _epoch == epochs):
-            if _epoch == epochs:
+            # if _epoch == epochs:
             
-                validate_result = validate_fn(module=module,
-                                          num_classes=num_classes,
-                                          loader=loader_valid,
-                                          writer=writer, tag=tag,
-                                          _epoch=_epoch + start_epoch,
-                                          verbose=verbose, indent=indent,
-                                          label_train=label_train,
-                                          hapi_label_train=hapi_label_train, encoder_train=encoder_train,
-                                          api=api, task=task, after_loss_fn=after_loss_fn, adv_valid=adv_valid,
-                                          adv_fidelity_fn=adv_fidelity_fn,tea_model=tea_model,log_dir=log_dir,
-                                          **kwargs)
-            else:
+            #     validate_result = validate_fn(module=module,
+            #                               num_classes=num_classes,
+            #                               loader=loader_valid,
+            #                               writer=writer, tag=tag,
+            #                               _epoch=_epoch + start_epoch,
+            #                               verbose=verbose, indent=indent,
+            #                               label_train=label_train,
+            #                               hapi_label_train=hapi_label_train, encoder_train=encoder_train,
+            #                               api=api, task=task, after_loss_fn=after_loss_fn, adv_valid=adv_valid,
+            #                               adv_fidelity_fn=adv_fidelity_fn,tea_model=tea_model,log_dir=log_dir,
+            #                               **kwargs)
+            # else:
                             
-                validate_result = validate_fn(module=module,
+            validate_result = validate_fn(module=module,
                                           num_classes=num_classes,
                                           loader=loader_valid,
                                           writer=writer, tag=tag,
