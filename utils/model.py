@@ -1363,20 +1363,7 @@ def distillation(module: nn.Module, pgd_set, num_classes: int,
                                    tag_scalar_dict={tag: ahapi_succ}, global_step=_epoch + start_epoch)
 
         if validate_interval != 0 and (_epoch % validate_interval == 0 or _epoch == epochs):
-            if _epoch == epochs:
-                validate_result = validate_fn(module=module,
-                            num_classes=num_classes,
-                            loader=loader_valid,
-                            writer=writer, tag=tag,
-                            _epoch=_epoch + start_epoch,
-                            verbose=verbose, indent=indent,
-                            label_train=label_train,
-                            hapi_label_train=hapi_label_train, encoder_train=encoder_train,
-                            api=api, task=task, after_loss_fn=after_loss_fn, adv_valid=adv_valid, 
-                            adv_fidelity_fn=adv_fidelity_fn,tea_model=tea_model,log_dir=log_dir,
-                            **kwargs)
-            else:
-                validate_result = validate_fn(module=module,
+            validate_result = validate_fn(module=module,
                                 num_classes=num_classes,
                                 loader=loader_valid,
                                 writer=writer, tag=tag,
