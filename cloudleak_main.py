@@ -18,6 +18,7 @@ from torch.utils.data import DataLoader
 # !pip install pytorch_transformers
 # from pytorch_transformers import AdamW
 from dataset.expw import EXPW  # Adam's optimization w/ fixed weight decay
+from dataset.ferplus import FERPLUS
 
 from dataset.imdb import IMDB
 from dataset.rafdb import RAFDB
@@ -141,6 +142,10 @@ elif args.dataset == 'kdef':
     train_dataset = KDEF(input_directory=os.path.join('/data/jc/data/image/KDEF_and_AKDEF/KDEF_spilit',"train"),hapi_data_dir=args.hapi_data_dir,hapi_info=args.hapi_info,api=args.api,transform=transform)
     test_dataset = KDEF(input_directory=os.path.join('/data/jc/data/image/KDEF_and_AKDEF/KDEF_spilit',"valid"),hapi_data_dir=args.hapi_data_dir,hapi_info=args.hapi_info,api=args.api,transform=transform)
     task = 'emotion'
+elif args.dataset == 'ferplus':
+    train_dataset = FERPLUS(input_directory=os.path.join('/data/jc/data/image/ferplus_hapi',"train"),hapi_data_dir=args.hapi_data_dir,hapi_info=args.hapi_info,api=args.api,transform=transform)
+    test_dataset = FERPLUS(input_directory=os.path.join('/data/jc/data/image/ferplus_hapi',"valid"),hapi_data_dir=args.hapi_data_dir,hapi_info=args.hapi_info,api=args.api,transform=transform)
+    task = 'emotion'
 elif args.dataset == 'cifar10':
     train_dataset = CIFAR10(mode='train',transform=transform)
     test_dataset = CIFAR10(mode='valid',transform=transform)
@@ -222,7 +227,7 @@ def get_sampler(train_dataset):
     return WeightedRandomSampler(torch.DoubleTensor(weights), int(num_samples))
 
 unlabel_dataset_indices =None
-if args.unlabel_batch != -1:#mixmatch
+if args.unlabel_batch != -1:#mixmatchseed
     _temp_dataset, _ = split_dataset(
         train_dataset,
         length=(args.label_batch+args.unlabel_batch)*args.batch_size)
@@ -236,6 +241,9 @@ if args.unlabel_batch != -1:#mixmatch
                                 _temp_unlabel_dataset.indices)
     elif args.dataset == 'kdef':
         _unlabel_dataset = Subset(KDEF(input_directory=os.path.join('/data/jc/data/image/KDEF_and_AKDEF/KDEF_spilit',"train"),hapi_data_dir=args.hapi_data_dir,hapi_info=args.hapi_info,api=args.api,transform = 'mixmatch'),
+                                _temp_unlabel_dataset.indices)
+    elif args.dataset == 'ferplus':
+        _unlabel_dataset = Subset(FERPLUS(input_directory=os.path.join('/data/jc/data/image/ferplus_hapi',"train"),hapi_data_dir=args.hapi_data_dir,hapi_info=args.hapi_info,api=args.api,transform = transform_type),
                                 _temp_unlabel_dataset.indices)
     elif args.dataset == 'cifar10':
         _unlabel_dataset = Subset(CIFAR10(mode='train',transform = 'mixmatch'),

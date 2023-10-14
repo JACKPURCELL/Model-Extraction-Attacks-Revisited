@@ -381,7 +381,7 @@ from torchvision.utils import save_image
 
 
 def get_api(x, indices, _input=None,api='amazon', tea_model=None):
-    adv_x_num = 200
+    adv_x_num = 900
 
     # define a transform to convert a tensor to PIL image
     transform = T.ToPILImage(mode='RGB')
@@ -655,7 +655,7 @@ def distillation(module: nn.Module, pgd_set, num_classes: int,
 
 
             elif adv_valid == 'cw':
-                adv_x = cw(selected_data, torch.argmax(selected_output, dim=-1))
+                adv_x = cw(_input, torch.argmax(_output, dim=-1))
                
             else:
                 raise NotImplementedError(f'{adv_train=} is not supported yet.')
@@ -848,17 +848,19 @@ def distillation(module: nn.Module, pgd_set, num_classes: int,
             module.eval()
         activate_params(module, [])
 
-        hapi_loss, hapi_acc1 = (
-            logger.meters['hapi_loss'].global_avg,
-            logger.meters['hapi_acc1'].global_avg)
+        gt_acc1, hapi_loss, hapi_acc1 = (
+                logger.meters['gt_acc1'].global_avg,
+                logger.meters['hapi_loss'].global_avg,
+                logger.meters['hapi_acc1'].global_avg)
         if writer is not None:
-            
+            writer.add_scalars(main_tag='gt_acc1/' + main_tag,
+                                tag_scalar_dict={tag: gt_acc1}, global_step=_epoch + start_epoch)
             writer.add_scalars(main_tag='hapi_loss/' + main_tag,
                                 tag_scalar_dict={tag: hapi_loss}, global_step=_epoch + start_epoch)
             writer.add_scalars(main_tag='hapi_acc1/' + main_tag,
-                                tag_scalar_dict={tag: hapi_acc1}, global_step=_epoch + start_epoch)
+                                   tag_scalar_dict={tag: hapi_acc1}, global_step=_epoch + start_epoch)
             with open(os.path.join(log_dir, "train.csv"), "a") as f:
-                    f.write("%d,%f,%f\n"%(_epoch + start_epoch, hapi_loss,hapi_acc1 ))
+                    f.write("%d,%f,%f,%f\n"%(_epoch + start_epoch, gt_acc1,hapi_loss,hapi_acc1 ))
 
         if validate_interval != 0 and (_epoch % validate_interval == 0 or _epoch == epochs):
             if _epoch == epochs:
@@ -904,6 +906,25 @@ def distillation(module: nn.Module, pgd_set, num_classes: int,
                 prints('-' * 50, indent=indent)
     module.zero_grad()
     print('best_validate_result', best_validate_result)
+    with open(os.path.join(log_dir, "valid.csv"), "a") as f:
+                    f.write("%d,%f,%f\n"%(99999, best_validate_result[0],best_validate_result[2] ))
+    if adv_valid:                
+        
+        print(os.path.join(log_dir, f'model.pth'))
+        module.load_state_dict(os.path.join(log_dir, f'model.pth'))  
+                                    
+        validate_result = validate_fn(module=module,
+                                num_classes=num_classes,
+                            loader=loader_valid,
+                            writer=writer, tag=tag,
+                            _epoch=_epoch + start_epoch,
+                            verbose=verbose, indent=indent,
+                            label_train=label_train,
+                            hapi_label_train=hapi_label_train, encoder_train=encoder_train,
+                            api=api, task=task, after_loss_fn=after_loss_fn, adv_valid=adv_valid, 
+                            adv_fidelity_fn=adv_fidelity_fn,tea_model=tea_model,log_dir=log_dir,
+                            **kwargs)
+        
     return best_validate_result
 
 
@@ -1166,7 +1187,7 @@ def dis_validate(module: nn.Module, num_classes: int,
 
   
 
-    return hapi_acc1, hapi_loss
+    return hapi_acc1, hapi_loss,gt_acc1
 
 
 
