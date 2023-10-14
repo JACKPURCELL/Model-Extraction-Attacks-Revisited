@@ -381,7 +381,7 @@ from torchvision.utils import save_image
 
 
 def get_api(x, indices, _input=None,api='amazon', tea_model=None):
-    adv_x_num = 900
+    adv_x_num = 1000
 
     # define a transform to convert a tensor to PIL image
     transform = T.ToPILImage(mode='RGB')
@@ -655,7 +655,9 @@ def distillation(module: nn.Module, pgd_set, num_classes: int,
 
 
             elif adv_valid == 'cw':
-                adv_x = cw(_input, torch.argmax(_output, dim=-1))
+                model_label = torch.argmax(_output, dim=-1)
+                hapi_label = torch.argmax(_soft_label, dim=-1)
+                adv_x = cw(_input, model_label)
                
             else:
                 raise NotImplementedError(f'{adv_train=} is not supported yet.')
@@ -848,19 +850,18 @@ def distillation(module: nn.Module, pgd_set, num_classes: int,
             module.eval()
         activate_params(module, [])
 
-        gt_acc1, hapi_loss, hapi_acc1 = (
-                logger.meters['gt_acc1'].global_avg,
+        hapi_loss, hapi_acc1 = (
+
                 logger.meters['hapi_loss'].global_avg,
                 logger.meters['hapi_acc1'].global_avg)
         if writer is not None:
-            writer.add_scalars(main_tag='gt_acc1/' + main_tag,
-                                tag_scalar_dict={tag: gt_acc1}, global_step=_epoch + start_epoch)
+           
             writer.add_scalars(main_tag='hapi_loss/' + main_tag,
                                 tag_scalar_dict={tag: hapi_loss}, global_step=_epoch + start_epoch)
             writer.add_scalars(main_tag='hapi_acc1/' + main_tag,
                                    tag_scalar_dict={tag: hapi_acc1}, global_step=_epoch + start_epoch)
             with open(os.path.join(log_dir, "train.csv"), "a") as f:
-                    f.write("%d,%f,%f,%f\n"%(_epoch + start_epoch, gt_acc1,hapi_loss,hapi_acc1 ))
+                    f.write("%d,%f,%f\n"%(_epoch + start_epoch ,hapi_loss,hapi_acc1 ))
 
         if validate_interval != 0 and (_epoch % validate_interval == 0 or _epoch == epochs):
             if _epoch == epochs:
