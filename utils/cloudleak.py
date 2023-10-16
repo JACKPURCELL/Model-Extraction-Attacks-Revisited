@@ -381,7 +381,7 @@ from torchvision.utils import save_image
 
 
 def get_api(x, indices, _input=None,api='amazon', tea_model=None):
-    adv_x_num = 900
+    adv_x_num = 500
 
     # define a transform to convert a tensor to PIL image
     transform = T.ToPILImage(mode='RGB')
@@ -423,13 +423,13 @@ def get_api(x, indices, _input=None,api='amazon', tea_model=None):
                             'return_attributes': 'emotion'}
                     attempts = 0
                     success = False
-                    while attempts < 3 and not success:
+                    while attempts < 10 and not success:
                         try:
                             r = requests.post(url='https://api-us.faceplusplus.com/facepp/v3/detect', data=data)
                             success = True
                         except:
                             attempts += 1
-                            if attempts == 3:
+                            if attempts == 10:
                                 print('no response')
                                 os._exit(0)
                     responses = r.text

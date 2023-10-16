@@ -37,7 +37,11 @@ class googlenet(nn.Module):
     def forward(self, x):
         if self.norm_par is None:
             return self.model(x)
-        return self.model(self.transform(x)).logits
+        try:
+            return self.model(self.transform(x)).logits
+        except:
+            return self.model(self.transform(x))
+
     
     def define_optimizer(
         self, parameters: str | Iterator[nn.Parameter] = 'full',
