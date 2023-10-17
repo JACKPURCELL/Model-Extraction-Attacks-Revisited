@@ -70,7 +70,7 @@ def entropy(y_pred_prob, indices, n_samples):
     return eni[:, 0].type(torch.IntTensor)[:n_samples]
 
 
-def mixmatch_get_data(data, forward_fn, unlabel_iterator):
+def mixmatch_get_data(data, forward_fn, unlabel_iterator,tea_model=None):
     # https://github.com/YU1ut/MixMatch-pytorch/blob/master/train.py
     r"""Process data. Defaults to be :attr:`self.dataset.get_data`.
     If :attr:`self.dataset` is ``None``, return :attr:`data` directly.
@@ -89,14 +89,27 @@ def mixmatch_get_data(data, forward_fn, unlabel_iterator):
     alpha: float = 0.75
     # mixmatch: bool = False
     # lambda_u: float = 100.0
-    _input, _label, _soft_label, hapi_label = data
-    _input = _input.cuda()
-    _soft_label = _soft_label.cuda()
-    _label = _label.cuda()
-    hapi_label = hapi_label.cuda()
-    (inputs_u, inputs_u2), _, _, _ = next(unlabel_iterator)
-    inputs_u = inputs_u.cuda()
-    inputs_u2 = inputs_u2.cuda()
+    if tea_model is not None:
+        _input, _label = data
+        _input = _input.cuda()
+        _label = _label.cuda()
+        hapi_label = _label
+        m = nn.Softmax(dim=1)
+        with torch.no_grad():
+            _soft_label = m(tea_model(_input))
+        hapi_label = torch.argmax(_soft_label, dim=-1)
+        (inputs_u, inputs_u2), _ = next(unlabel_iterator)
+        inputs_u = inputs_u.cuda()
+        inputs_u2 = inputs_u2.cuda()
+    else:
+        _input, _label, _soft_label, hapi_label = data
+        _input = _input.cuda()
+        _soft_label = _soft_label.cuda()
+        _label = _label.cuda()
+        hapi_label = hapi_label.cuda()
+        (inputs_u, inputs_u2), _, _, _ = next(unlabel_iterator)
+        inputs_u = inputs_u.cuda()
+        inputs_u2 = inputs_u2.cuda()
 
     with torch.no_grad():
         # compute guessed labels of unlabel samples
@@ -1127,7 +1140,28 @@ def distillation(module: nn.Module, pgd_set, num_classes: int,
                     else:
                         loss = loss_fn(_soft_label=_soft_label, _output=_output)
                 case 'cifar10':
-                    if encoder_train:
+                    if mixmatch:
+                            
+                        mixed_input, mixed_target, batch_size = mixmatch_get_data(data, forward_fn, unlabel_iterator,tea_model)
+
+                        # interleave labeled and unlabed samples between batches to get correct batchnorm calculation
+                        mixed_input = list(torch.split(mixed_input, batch_size))
+                        mixed_input = interleave_fn(mixed_input, batch_size)
+
+                        logits = [forward_fn(mixed_input[0])]
+                        for input in mixed_input[1:]:
+                            logits.append(forward_fn(input))
+
+                        # put interleaved samples back
+                        logits = interleave_fn(logits, batch_size)
+                        logits_x = logits[0]
+                        logits_u = torch.cat(logits[1:], dim=0)
+
+                        loss = loss_fn(outputs_x=logits_x, targets_x=mixed_target[:batch_size],
+                                       outputs_u=logits_u, targets_u=mixed_target[batch_size:], iter=_epoch, total_iter=epochs)
+                    
+                    
+                    elif encoder_train:
                         _input, _label = data
                         _input = _input.cuda()
                         _label = _label.cuda()
@@ -1165,27 +1199,28 @@ def distillation(module: nn.Module, pgd_set, num_classes: int,
                                 _soft_label = m(tea_model(_input))
                             hapi_label = torch.argmax(_soft_label, dim=-1)
                         _output = forward_fn(_input)
+                    if not mixmatch and not encoder_train and not fixmatch:
 
-                    if adv_train and _epoch >= start_pgd_epoch:
-                        optimizer.zero_grad()
-                        loss, adv_x, _adv_soft_label, _adv_hapi_label, attack_succ, ahapi_succ = after_loss_fn(_input=_input, ori_img=ori_img, ori_soft=ori_soft,
-                                                                                                               _label=_label, _soft_label=_soft_label, _output=_output, optimizer=optimizer, tea_model=tea_model)
-                        if grad_clip is not None:
-                            nn.utils.clip_grad_norm_(params, grad_clip)
-                        optimizer.step()
+                        if adv_train and _epoch >= start_pgd_epoch:
+                            optimizer.zero_grad()
+                            loss, adv_x, _adv_soft_label, _adv_hapi_label, attack_succ, ahapi_succ = after_loss_fn(_input=_input, ori_img=ori_img, ori_soft=ori_soft,
+                                                                                                                _label=_label, _soft_label=_soft_label, _output=_output, optimizer=optimizer, tea_model=tea_model)
+                            if grad_clip is not None:
+                                nn.utils.clip_grad_norm_(params, grad_clip)
+                            optimizer.step()
 
-                        logger.update(n=_adv_soft_label.shape[0], attack_succ=attack_succ, ahapi_succ=ahapi_succ)
+                            logger.update(n=_adv_soft_label.shape[0], attack_succ=attack_succ, ahapi_succ=ahapi_succ)
 
-                     
-                    elif encoder_train:
-                        criterion = nn.BCELoss()
-                        loss = criterion(_output, _input)
-                    elif label_train:
-                        loss = loss_fn(_label=_label, _output=_output)
-                    elif hapi_label_train:
-                        loss = loss_fn(_label=hapi_label, _output=_output)
-                    else:
-                        loss = loss_fn(_soft_label=_soft_label, _output=_output)
+                        
+                        elif encoder_train:
+                            criterion = nn.BCELoss()
+                            loss = criterion(_output, _input)
+                        elif label_train:
+                            loss = loss_fn(_label=_label, _output=_output)
+                        elif hapi_label_train:
+                            loss = loss_fn(_label=hapi_label, _output=_output)
+                        else:
+                            loss = loss_fn(_soft_label=_soft_label, _output=_output)
 
             if backward_and_step and (adv_train == None or _epoch < start_pgd_epoch ):
                 optimizer.zero_grad()

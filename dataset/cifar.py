@@ -63,6 +63,15 @@ def get_transform_cifar(mode: str, auto_augment: bool = False,
                 mean=norm_par['mean'], std=norm_par['std']))
     return transforms.Compose(transform)
 
+class TransformTwice:
+    def __init__(self, transform):
+        self.transform = transform
+
+    def __call__(self, inp):
+        out1 = self.transform(inp)
+        out2 = self.transform(inp)
+        return out1, out2
+    
 class CIFAR10(datasets.CIFAR10):
     r"""CIFAR10 dataset introduced by Alex Krizhevsky in 2009.
     It inherits :class:`trojanvision.datasets.ImageSet`.
@@ -101,6 +110,15 @@ class CIFAR10(datasets.CIFAR10):
             transforms.ToTensor()
            
         ])
+        elif transform == 'mixmatch':
+            transform = transforms.Compose([
+            transforms.RandomCrop(32, padding=4),
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor()
+           
+        ])
+            transform = TransformTwice(transform)
+            
             # get_transform_cifar(
             #         mode, auto_augment=True,
             #         cutout=False, cutout_length=None,
