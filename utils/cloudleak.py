@@ -381,14 +381,20 @@ from torchvision.utils import save_image
 
 
 def get_api(x, indices, _input=None,api='amazon', tea_model=None):
-    adv_x_num = 500
+    adv_x_num = 200
 
     # define a transform to convert a tensor to PIL image
     transform = T.ToPILImage(mode='RGB')
     convert_tensor = T.ToTensor()
 
     # convert the tensor to PIL image using above transform
-    soft_label_batch = torch.zeros((x.shape[0], 8 if api =='amazon' else 7))
+    if api == 'amazon':
+        length = 8
+    elif api == 'cifar10':
+        length = 10
+    else:
+        length = 7  
+    soft_label_batch = torch.zeros((x.shape[0], length))
     hapi_label_batch = torch.zeros((x.shape[0]))
     adv_x_batch = torch.zeros_like(x)
     new_indices = torch.zeros((x.shape[0]), dtype=torch.long)
@@ -495,6 +501,7 @@ def get_api(x, indices, _input=None,api='amazon', tea_model=None):
                         # hapi_label = torch.tensor(6)
                         noface_num += 1
 
+        
             case _:
                 raise NotImplementedError
 
@@ -574,7 +581,7 @@ def distillation(module: nn.Module, pgd_set, num_classes: int,
                 adv_x = cw(_input, model_label)
                 
             adv_x, _adv_soft_label, _adv_hapi_label, new_indices = get_api(
-                 adv_x, np.arange(adv_x.shape[0]), _input,api)
+                 adv_x, np.arange(adv_x.shape[0]), _input,api,tea_model)
 
             adv_model_output = torch.argmax(forward_fn(adv_x) , dim=-1)
             
@@ -600,7 +607,7 @@ def distillation(module: nn.Module, pgd_set, num_classes: int,
 
 
             _, _, T_adv_x_label, new_indices = get_api(
-                    S_succ_adv_x, indices, api=api)
+                    S_succ_adv_x, indices, api,tea_model)
             length = T_adv_x_label.shape[0]
             if length == 0:
                 return -1,-1
@@ -719,7 +726,17 @@ def distillation(module: nn.Module, pgd_set, num_classes: int,
                     print("clean_num: ",clean_num,"  adv_num: ",adv_num)
                 
                 for i,data in enumerate(loader_dst):
-                    input_batch, _label, _soft_label, hapi_label= data
+                    if tea_model is not None:
+                        input_batch, _label = data
+                        input_batch = input_batch.cuda()
+                        _label = _label.cuda()
+                        hapi_label = _label
+                        m = nn.Softmax(dim=1)
+                        with torch.no_grad():
+                            _soft_label = m(tea_model(input_batch))
+                        hapi_label = torch.argmax(_soft_label, dim=-1)
+                    else:
+                        input_batch, _label, _soft_label, hapi_label= data
 
 
                     input_batch = input_batch.cuda()
@@ -774,7 +791,18 @@ def distillation(module: nn.Module, pgd_set, num_classes: int,
                                                         num_workers=workers, pin_memory=True,drop_last=False)
 
                 for i,data in enumerate(loader_dst):
-                    input_batch, _label, _soft_label, hapi_label= data
+                    if tea_model is not None:
+                        input_batch, _label = data
+                        input_batch = input_batch.cuda()
+                        _label = _label.cuda()
+                        hapi_label = _label
+                        m = nn.Softmax(dim=1)
+                        with torch.no_grad():
+                            _soft_label = m(tea_model(input_batch))
+                        hapi_label = torch.argmax(_soft_label, dim=-1)
+                    else:
+                        
+                        input_batch, _label, _soft_label, hapi_label= data
                     if i == 0 and _epoch == 1:
                         Synthetic_x = input_batch
                         Synthetic_adv_x = input_batch
@@ -993,7 +1021,21 @@ def dis_validate(module: nn.Module, num_classes: int,
                     _output = forward_fn(_input)
                     if adv_valid is not None:
                         adv_fidelity,adv_fidelity_hard = adv_fidelity_fn(_input,_soft_label,_output)
-
+                case 'cifar10':
+                    _input, _label = data
+                    _input = _input.cuda()
+                    _label = _label.cuda()
+                    hapi_label = _label
+                    ori_img = None
+                    ori_soft = None
+                    if tea_model is not None:
+                        m = nn.Softmax(dim=1)
+                        with torch.no_grad():
+                            _soft_label = m(tea_model(_input))
+                        hapi_label = torch.argmax(_soft_label, dim=-1)
+                    _output = forward_fn(_input)
+                    if adv_valid is not None:
+                        adv_fidelity,adv_fidelity_hard = adv_fidelity_fn(_input,_soft_label,_output)
                 case 'sentiment':
                     if module.model_name == 'xlnet':
                         input_ids, token_type_ids, attention_mask, _label, _soft_label, hapi_label = data

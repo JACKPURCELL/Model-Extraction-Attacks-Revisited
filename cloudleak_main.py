@@ -95,6 +95,7 @@ parser.add_argument('--adv_valid', choices=[None, 'pgd', 'free', 'cw'])
 
 parser.add_argument('--encoder_train', action='store_true')
 parser.add_argument('--encoder_path',  type=str)
+parser.add_argument('--teacher_path',  type=str)
 parser.add_argument('--encoder_attack', action='store_true')
 
 parser.add_argument('--adv_train_iter', type=int, default=7)
@@ -191,8 +192,8 @@ elif 'vgg' in args.model:
 elif 'autoencoder' in args.model:
     model = getattr(models,'autoencoder')(norm_par=train_dataset.norm_par)
 if args.api == 'cifar10': 
-    tea_model =  getattr(models,'resnet')(norm_par=train_dataset.norm_par,model_name='resnet50',num_classes=args.num_classes)    
-    tea_model.load_state_dict(torch.load('/home/jkl6486/hermes/runs/cifar10gt/model.pth'))
+    tea_model =  getattr(models,'resnet')(norm_par=train_dataset.norm_par,model_name='resnet50_cifar10',num_classes=args.num_classes)    
+    tea_model.load_state_dict(args.teacher_path)
 else:
     tea_model = None
 if parallel:

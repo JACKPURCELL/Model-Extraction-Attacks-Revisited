@@ -969,7 +969,7 @@ def distillation(module: nn.Module, pgd_set, num_classes: int,
                 sample_times -= 1
                 n_train=len(train_dataset)
                 fraction=0.5
-                balance_adp = False
+                balance_adp = True
                 
                 if balance_adp:
                     for c in range(num_classes):
