@@ -33,7 +33,7 @@ class ResNet(nn.Module):
             _model = ModelClass().cuda()
         elif 'cifar10' in model_name:
             ModelClass = getattr(torchvision.models, model_name.split('_')[0])
-            _model = ModelClass().cuda()
+            _model = ModelClass(weights='DEFAULT').cuda()
             _model.conv1 = nn.Conv2d(3, 64, kernel_size=3,
                                stride=1, padding=1, bias=False).cuda()
         else:

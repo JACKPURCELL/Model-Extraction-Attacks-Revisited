@@ -609,7 +609,7 @@ def distillation(module: nn.Module, pgd_set, num_classes: int,
             
         selection_result = np.array([], dtype=np.int32)
         
-        def construct_matrix(n_train,index=None):
+        def construct_matrix(n_train,index=None,tea_model=None):
             with torch.no_grad():
                 with module.embedding_recorder:
                     sample_num = n_train if index is None else len(index)
@@ -619,12 +619,22 @@ def distillation(module: nn.Module, pgd_set, num_classes: int,
                             batch_size=batch_size,
                             num_workers=num_workers)
                     for i, data in enumerate(full_train_loader):
-
-                        _input, _label, _soft_label, hapi_label = data
-                        _input = _input.cuda()
-                        _soft_label = _soft_label.cuda()
-                        _label = _label.cuda()
-                        hapi_label = hapi_label.cuda()
+                        if tea_model is not None:
+                            _input, _label = data
+                            _input = _input.cuda()
+                            _label = _label.cuda()
+                            hapi_label = _label
+                            m = nn.Softmax(dim=1)
+                            with torch.no_grad():
+                                _soft_label = m(tea_model(_input))
+                            hapi_label = torch.argmax(_soft_label, dim=-1)
+        
+                        else:
+                            _input, _label, _soft_label, hapi_label = data
+                            _input = _input.cuda()
+                            _soft_label = _soft_label.cuda()
+                            _label = _label.cuda()
+                            hapi_label = hapi_label.cuda()
 
                         _output = forward_fn(_input)
                             
@@ -953,6 +963,7 @@ def distillation(module: nn.Module, pgd_set, num_classes: int,
         _epoch += 1
         logger.reset()
         if adaptive == 'kcenter':
+            print('kcenter')
             if sample_times != 0:
                 loader_train = None
                 sample_times -= 1
@@ -963,7 +974,7 @@ def distillation(module: nn.Module, pgd_set, num_classes: int,
                 if balance_adp:
                     for c in range(num_classes):
                         class_index = np.where(np.array(train_dataset.targets) == c)[0]
-                        selection_result = np.append(selection_result, k_center_greedy(construct_matrix(n_train,class_index),
+                        selection_result = np.append(selection_result, k_center_greedy(construct_matrix(n_train,class_index,tea_model),
                                                                                     budget=round(fraction * len(class_index)),                                                                          
                                                                                     index=class_index,
                                                                                     already_selected=[] if already_selected==[] else already_selected[
@@ -971,7 +982,7 @@ def distillation(module: nn.Module, pgd_set, num_classes: int,
                                                                                                 class_index)]))
 
                 else:
-                    selection_result = k_center_greedy(matrix=construct_matrix(n_train), budget=n_samples,already_selected=selection_result)
+                    selection_result = k_center_greedy(matrix=construct_matrix(n_train,None,tea_model), budget=n_samples,already_selected=selection_result)
                     
                 
                 dst_subset = torch.utils.data.Subset(train_dataset, selection_result)
