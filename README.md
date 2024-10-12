@@ -17,3 +17,17 @@ Adaptive
 ```shell
 CUDA_VISIBLE_DEVICES=2 nohup python main.py --optimizer Lion  --epochs 264 --batch_size 64 --model resnet50_raw --lr 3e-4 --op_parameters full --validate_interval 1 --num_classes 7 --dataset rafdb --lr_scheduler  --save --weight_decay 0.0 --sample_times 64  --n_samples 64 --adaptive kcenter --lr_warmup_epoch 64 --log_dir adp/420/6_22_420_b64_lion_r50raw_adp_64_kcenter  --hapi_info fer/rafdb/microsoft_fer/22-05-23 --seed 420 --validate_interval 1 &
 ```
+
+
+Still needs to be organized, if you have questions please email or submit an issue!
+
+
+```txt
+@inproceedings{liang2024model,
+  title={Model extraction attacks revisited},
+  author={Liang, Jiacheng and Pang, Ren and Li, Changjiang and Wang, Ting},
+  booktitle={Proceedings of the 19th ACM Asia Conference on Computer and Communications Security},
+  pages={1231--1245},
+  year={2024}
+}
+```
