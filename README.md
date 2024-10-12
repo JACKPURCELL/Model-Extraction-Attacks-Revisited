@@ -2,6 +2,7 @@
 # Code for Model Extraction Attacks Revisited
 This is the code implementation (pytorch) for our paper in AsiaCCS 2024:
 [Model Extraction Attacks Revisited](https://dl.acm.org/doi/abs/10.1145/3634737.3657002)
+
 Basic
 ```shell
 CUDA_VISIBLE_DEVICES=3 nohup python main.py --optimizer Lion  --epochs 200 --batch_size 64 --model resnet50_raw --lr 3e-4 --op_parameters full --num_classes 7 --dataset rafdb --lr_scheduler  --save --weight_decay 0.0 --log_dir  model/
